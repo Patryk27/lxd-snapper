@@ -1,0 +1,6 @@
+# This policy will create and keep at most one (the most recent) snapshot for each container.
+
+policies:
+  main:
+    allowed-statuses: ['Running']
+    keep-last: 1

@@ -1,0 +1,10 @@
+policies:
+  # Keep latest three daily snapshots for all the running containers:
+  running-containers:
+    allowed-statuses: ['Running']
+    keep-daily: 3
+
+  # Keep latest one daily snapshot for all the stopped containers:
+  stopped-containers:
+    allowed-statuses: ['Stopped']
+    keep-daily: 1
