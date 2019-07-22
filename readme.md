@@ -103,9 +103,9 @@ snapshots.
 $ ./lxd-snapper prune
 ```
 
-This command deletes all the _old_, automatically created (`auto-`)
+This command deletes all the **old**, automatically created (`auto-`)
 snapshots from each container that matches policy specified in the
-`config.yml` file.
+`config.yml` file, adhering to the `keep-` rules.
 
 Only snapshots with names matching the `auto-$DATE-$TIME` format will be
 pruned - all the other ones will be left untouched.
