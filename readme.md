@@ -138,8 +138,8 @@ matches policy specified in the `config.yml` file.
 
 This command is **destructive** - it completely ignores all the `keep-`
 options and recklessly deletes all snapshots it can find (even the
-non-auto-ones!). It does not touch the containers themselves though,
-they will survive.
+non-auto ones!). It does not touch the containers themselves though,
+they will survive and keep running.
 
 You can execute `./lxd-snapper --dry-run nuke` to perform a simulation
 that will show what _would_ happen without actually removing any
@@ -233,6 +233,12 @@ $ NO_COLOR=0 ./lxd-snapper
 
 - Probably some small refactoring - right now a few parts of the
   application seem to be quite rough.
+  
+# Contributing
+
+I am very much open for contributions - e.g. if you have a request or
+you have found a bug, just drop an issue and I will happily take care of
+it.
  
 # Disclaimer
 
