@@ -1,0 +1,7 @@
+# TODO describe
+
+snapshot-name-prefix: 'magic-'
+
+policies:
+  every-container:
+    keep-last: 5

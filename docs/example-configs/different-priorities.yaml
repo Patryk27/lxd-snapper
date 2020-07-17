@@ -1,0 +1,18 @@
+# TODO describe
+
+policies:
+  everyone:
+    keep-daily: 10
+    keep-limit: 1
+
+  important-clients:
+    included-projects: ['client-a', 'client-b']
+    keep-limit: 5
+
+  unimportant-clients:
+    included-projects: ['client-c']
+    keep-limit: 2
+
+  databases:
+    included-containers: ['mysql']
+    keep-limit: 25

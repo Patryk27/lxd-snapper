@@ -1,17 +1,27 @@
 [package]
 name = "lxd-snapper"
-version = "0.1.0"
+version = "0.3.0"
 license = "MIT"
 authors = ["Patryk Wychowaniec <wychowaniec.patryk@gmail.com>"]
 edition = "2018"
 
 [workspace]
 members = [
-    "src/lib_command",
-    "src/lib_config",
-    "src/lib_driver",
-    "src/lib_lxd",
+    "libs/*",
 ]
 
 [dependencies]
-lib_driver = { path = "src/lib_driver" }
+anyhow = "1.0"
+chrono = "0.4"
+clap = "3.0.0-beta.1"
+colored = "1.8"
+indexmap = { version = "1.4", features = ["serde-1"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8"
+
+lib_lxd = { path = "libs/lxd" }
+
+[dev-dependencies]
+glob = "0.3"
+indoc = "0.3"
+pretty_assertions = "0.6"
