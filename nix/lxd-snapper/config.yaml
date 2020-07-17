@@ -1,0 +1,10 @@
+policies:
+  apps:
+    included-containers: ['php']
+    keep-daily: 1
+    keep-monthly: 1
+
+  databases:
+    included-containers: ['mysql']
+    keep-daily: 4
+    keep-monthly: 2
