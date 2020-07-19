@@ -225,9 +225,9 @@ let
               assert "kept snapshots: 16" in out, f"kept snapshots != 16; actual output: {out}"
 
               for (project, manual_snapshot_count) in [("client-a", 1), ("client-b", 0)]:
-                  # While starting the test, we've created a manual snapshot (via `lxc snapshot`) for
-                  # each container inside the `client-a` project. Since those snapshots are - like I
-                  # said - manual, they shouldn't be touched by the `prune` command
+                  # While starting the test, we've created a manual snapshot (via `lxc snapshot`)
+                  # for each instance inside the `client-a` project. Since those snapshots are
+                  # - like I said - manual, they shouldn't be touched by the `prune` command
                   if manual_snapshot_count > 0:
                       assert_snapshot_exists(project, "mysql", "snap0")
                       assert_snapshot_exists(project, "php", "snap0")
@@ -255,8 +255,8 @@ let
                   assert_snapshot_count(project, "php", ".*", manual_snapshot_count + 2)
 
               for project in ["client-c"]:
-                  for container in ["apache", "mysql", "php"]:
-                      assert_snapshot_count(project, container, ".*", 0)
+                  for instance in ["apache", "mysql", "php"]:
+                      assert_snapshot_count(project, instance, ".*", 0)
         '';
       }) { };
 
