@@ -29,6 +29,7 @@ struct Args {
     /// By default, lxd-snapper tries to locate the `lxc` executable inside your
     /// PATH variable - when this fails for you, using this parameter you can
     /// provide location of the `lxc` executable by hand
+    #[clap(short, long)]
     lxc_path: Option<PathBuf>,
 
     #[clap(subcommand)]
