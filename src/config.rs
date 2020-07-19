@@ -54,12 +54,22 @@ impl Config {
         name.as_str().starts_with(&self.snapshot_name_prefix)
     }
 
+    /// Returns all policies applying for specified project & instance.
+    /// If no policy matches given criteria, returns an empty list.
+    pub fn policies(&self, project: &LxdProject, instance: &LxdInstance) -> Vec<(&str, &Policy)> {
+        self.policies
+            .iter()
+            .filter(|(_, policy)| policy.applies_to(project, instance))
+            .map(|(name, policy)| (name.as_str(), policy))
+            .collect()
+    }
+
     /// Returns policy for specified project & instance.
     /// If no policy matches given criteria, returns `None`.
     pub fn policy(&self, project: &LxdProject, instance: &LxdInstance) -> Option<Policy> {
-        self.policies
-            .values()
-            .filter(|policy| policy.applies_to(project, instance))
+        self.policies(project, instance)
+            .into_iter()
+            .map(|(_, policy)| policy)
             .fold(None, |result, current| {
                 Some(result.unwrap_or_default().merge_with(current.clone()))
             })

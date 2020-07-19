@@ -44,17 +44,33 @@ enum Command {
     /// Shorthand for `backup` followed by `prune`
     BackupAndPrune,
 
-    /// Removes *ALL* snapshots for each instance (i.e. container & virtual
-    /// machine) matching the policy; you most likely *don't* want to use
-    /// it on production
-    Nuke,
-
     /// Removes stale snapshots for each instance (i.e. container & virtual
     /// machine) matching the policy
     Prune,
 
     /// Validates policy's syntax
     Validate,
+
+    /// Various debug-oriented commands
+    Debug(DebugCommand),
+
+    /// Various query-oriented commands
+    Query(QueryCommand),
+}
+
+#[derive(Clap, Debug)]
+enum DebugCommand {
+    /// Removes *ALL* snapshots (including the ones created manually) for each
+    /// instance (i.e. container & virtual machine) matching the policy; if
+    /// you suddenly created tons of unnecessary snapshots, this is the way to
+    /// go
+    Nuke,
+}
+
+#[derive(Clap, Debug)]
+enum QueryCommand {
+    /// Lists all the LXD instances together with policies associated with them
+    Instances,
 }
 
 fn main() -> Result<()> {
@@ -65,23 +81,26 @@ fn main() -> Result<()> {
     }
 
     let stdout = &mut stdout();
-    let config = config(&args.config)?;
-    let mut lxd = lxd(args.dry_run, args.lxc_path)?;
+    let config = load_config(&args.config)?;
+    let mut lxd = init_lxd(args.dry_run, args.lxc_path)?;
 
     match args.cmd {
         Command::Backup => cmds::backup(stdout, &config, lxd.deref_mut()),
         Command::BackupAndPrune => cmds::backup_and_prune(stdout, &config, lxd.deref_mut()),
-        Command::Nuke => cmds::nuke(stdout, &config, lxd.deref_mut()),
         Command::Prune => cmds::prune(stdout, &config, lxd.deref_mut()),
         Command::Validate => unreachable!(),
+        Command::Debug(DebugCommand::Nuke) => cmds::debug_nuke(stdout, &config, lxd.deref_mut()),
+        Command::Query(QueryCommand::Instances) => {
+            cmds::query_instances(stdout, &config, lxd.deref_mut())
+        }
     }
 }
 
-fn config(path: &Path) -> Result<Config> {
+fn load_config(path: &Path) -> Result<Config> {
     Config::from_file(path)
 }
 
-fn lxd(dry_run: bool, lxc_path: Option<PathBuf>) -> Result<Box<dyn LxdClient>> {
+fn init_lxd(dry_run: bool, lxc_path: Option<PathBuf>) -> Result<Box<dyn LxdClient>> {
     let mut lxd = if let Some(lxc_path) = lxc_path {
         LxdProcessClient::new(lxc_path)
     } else {

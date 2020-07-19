@@ -3,7 +3,11 @@ use anyhow::Result;
 use lib_lxd::*;
 use std::io::Write;
 
-crate fn nuke(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
+crate fn debug_nuke(
+    stdout: &mut dyn Write,
+    config: &Config,
+    lxd: &mut dyn LxdClient,
+) -> Result<()> {
     writeln!(stdout, "Nuking instances:")?;
 
     for project in lxd.list_projects()? {
@@ -73,7 +77,7 @@ mod tests {
             let config = Config::default();
             let mut lxd = LxdFakeClient::new(instances());
 
-            nuke(&mut stdout, &config, &mut lxd).unwrap();
+            debug_nuke(&mut stdout, &config, &mut lxd).unwrap();
 
             assert_out!(
                 r#"
@@ -106,7 +110,7 @@ mod tests {
             let config = Config::from_code(POLICY);
             let mut lxd = LxdFakeClient::new(instances());
 
-            nuke(&mut stdout, &config, &mut lxd).unwrap();
+            debug_nuke(&mut stdout, &config, &mut lxd).unwrap();
 
             assert_out!(
                 r#"

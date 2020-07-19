@@ -1,9 +1,17 @@
-crate use self::{backup::*, backup_and_prune::*, nuke::*, prune::*, validate::*};
+crate use self::{
+    backup::*,
+    backup_and_prune::*,
+    debug_nuke::*,
+    prune::*,
+    query_instances::*,
+    validate::*,
+};
 
 mod backup;
 mod backup_and_prune;
-mod nuke;
+mod debug_nuke;
 mod prune;
+mod query_instances;
 mod validate;
 
 #[cfg(test)]
