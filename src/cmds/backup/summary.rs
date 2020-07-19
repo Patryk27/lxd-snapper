@@ -11,11 +11,11 @@ pub struct BackupSummary {
 impl BackupSummary {
     pub fn print(self, stdout: &mut dyn Write) -> Result<()> {
         if self.errors != 0 {
-            bail!("Some instances failed to be backed-up");
+            bail!("Some instances couldn't be backed-up");
         }
 
         if self.processed_instances == 0 {
-            bail!("Found no instances");
+            bail!("Found no instances matching any of the policies");
         }
 
         writeln!(stdout)?;
