@@ -1,7 +1,7 @@
 use anyhow::*;
 use chrono::{DateTime, TimeZone};
 use indexmap::IndexMap;
-use lib_lxd::{LxdContainer, LxdProject, LxdSnapshotName};
+use lib_lxd::{LxdInstance, LxdProject, LxdSnapshotName};
 use serde::export::fmt::Display;
 use serde::Deserialize;
 use std::{fs, path::Path};
@@ -54,12 +54,12 @@ impl Config {
         name.as_str().starts_with(&self.snapshot_name_prefix)
     }
 
-    /// Returns policy for specified project & container.
+    /// Returns policy for specified project & instance.
     /// If no policy matches given criteria, returns `None`.
-    pub fn policy(&self, project: &LxdProject, container: &LxdContainer) -> Option<Policy> {
+    pub fn policy(&self, project: &LxdProject, instance: &LxdInstance) -> Option<Policy> {
         self.policies
             .values()
-            .filter(|policy| policy.applies_to(project, container))
+            .filter(|policy| policy.applies_to(project, instance))
             .fold(None, |result, current| {
                 Some(result.unwrap_or_default().merge_with(current.clone()))
             })
@@ -197,27 +197,27 @@ mod tests {
         fn assert_policy(
             config: &Config,
             project_name: &str,
-            container_name: &str,
-            container_status: LxdContainerStatus,
+            instance_name: &str,
+            instance_status: LxdInstanceStatus,
             expected_policy: Option<Policy>,
         ) {
             let project = LxdProject {
                 name: LxdProjectName::new(project_name),
             };
 
-            let container = LxdContainer {
-                name: LxdContainerName::new(container_name),
-                status: container_status,
+            let instance = LxdInstance {
+                name: LxdInstanceName::new(instance_name),
+                status: instance_status,
                 snapshots: Default::default(),
             };
 
             pa::assert_eq!(
                 expected_policy,
-                config.policy(&project, &container),
-                "project_name={project_name}, container_name={container_name}, container_status={container_status}",
+                config.policy(&project, &instance),
+                "project_name={project_name}, instance_name={instance_name}, instance_status={instance_status}",
                 project_name = project_name,
-                container_name = container_name,
-                container_status = format!("{:?}", container_status),
+                instance_name = instance_name,
+                instance_status = format!("{:?}", instance_status),
             );
         }
 
@@ -233,7 +233,7 @@ mod tests {
                 &config,
                 "client-a",
                 "php",
-                LxdContainerStatus::Running,
+                LxdInstanceStatus::Running,
                 Some(Policy {
                     keep_daily: Some(10),
                     keep_limit: Some(5),
@@ -246,7 +246,7 @@ mod tests {
                 &config,
                 "client-a",
                 "mysql",
-                LxdContainerStatus::Running,
+                LxdInstanceStatus::Running,
                 Some(Policy {
                     keep_daily: Some(10),
                     keep_limit: Some(25),
@@ -262,7 +262,7 @@ mod tests {
                 &config,
                 "client-b",
                 "php",
-                LxdContainerStatus::Running,
+                LxdInstanceStatus::Running,
                 Some(Policy {
                     keep_daily: Some(10),
                     keep_limit: Some(5),
@@ -275,7 +275,7 @@ mod tests {
                 &config,
                 "client-b",
                 "mysql",
-                LxdContainerStatus::Running,
+                LxdInstanceStatus::Running,
                 Some(Policy {
                     keep_daily: Some(10),
                     keep_limit: Some(25),
@@ -291,7 +291,7 @@ mod tests {
                 &config,
                 "client-c",
                 "php",
-                LxdContainerStatus::Running,
+                LxdInstanceStatus::Running,
                 Some(Policy {
                     keep_daily: Some(10),
                     keep_limit: Some(2),
@@ -304,7 +304,7 @@ mod tests {
                 &config,
                 "client-c",
                 "mysql",
-                LxdContainerStatus::Running,
+                LxdInstanceStatus::Running,
                 Some(Policy {
                     keep_daily: Some(10),
                     keep_limit: Some(25),
@@ -320,7 +320,7 @@ mod tests {
                 &config,
                 "client-d",
                 "php",
-                LxdContainerStatus::Running,
+                LxdInstanceStatus::Running,
                 Some(Policy {
                     keep_daily: Some(10),
                     keep_limit: Some(1),
@@ -333,7 +333,7 @@ mod tests {
                 &config,
                 "client-d",
                 "mysql",
-                LxdContainerStatus::Running,
+                LxdInstanceStatus::Running,
                 Some(Policy {
                     keep_daily: Some(10),
                     keep_limit: Some(25),

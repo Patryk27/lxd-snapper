@@ -66,42 +66,42 @@ import <nixpkgs/nixos/tests/make-test-python.nix> ({ pkgs, ... }:
           )
 
 
-      # Asserts that given container contains exactly `count` snapshots matching
+      # Asserts that given instance contains exactly `count` snapshots matching
       # given regex.
       #
       # ```python
       # assert_snapshot_count("test", "snap\d", 1)
       # ```
-      def assert_snapshot_count(container, snapshot_regex, snapshot_count):
+      def assert_snapshot_count(instance, snapshot_regex, snapshot_count):
           snapshot_regex = snapshot_regex.replace("\\", "\\\\")
 
           machine.succeed(
-              f"lxc query /1.0/instances/{container}/snapshots"
+              f"lxc query /1.0/instances/{instance}/snapshots"
               + f" | jq -e '[ .[] | select(test(\"{snapshot_regex}\")) ] | length == {snapshot_count}'"
           )
 
 
-      # Asserts that given container contains exactly one snapshot matching
+      # Asserts that given instance contains exactly one snapshot matching
       # given regex.
       #
       # ```python
       # assert_snapshot_exists("test", "snap\d")
       # ```
-      def assert_snapshot_exists(container, snapshot_regex):
-          assert_snapshot_count(container, snapshot_regex, 1)
+      def assert_snapshot_exists(instance, snapshot_regex):
+          assert_snapshot_count(instance, snapshot_regex, 1)
 
 
-      # Asserts that given container contains exactly zero snapshots matching
+      # Asserts that given instance contains exactly zero snapshots matching
       # given regex.
       #
       # ```python
       # assert_snapshot_does_not_exist("test", "snap\d")
       # ```
-      def assert_snapshot_does_not_exist(container, snapshot_regex):
-          assert_snapshot_count(container, snapshot_regex, 0)
+      def assert_snapshot_does_not_exist(instance, snapshot_regex):
+          assert_snapshot_count(instance, snapshot_regex, 0)
 
 
-      with subtest("Create some containers and manual snapshots"):
+      with subtest("Create some instances and manual snapshots"):
           machine.succeed("lxc launch alpine mysql")
           machine.succeed("lxc snapshot mysql")
           assert_snapshot_exists("mysql", "snap0")
@@ -132,20 +132,20 @@ import <nixpkgs/nixos/tests/make-test-python.nix> ({ pkgs, ... }:
 
               assert "created snapshots: 2" in run_lxd_snapper("backup")
 
-              for container in ["php", "mysql"]:
-                  assert_snapshot_exists(container, snapshot_regex)
+              for instance in ["php", "mysql"]:
+                  assert_snapshot_exists(instance, snapshot_regex)
 
-              for container in ["nginx"]:
-                  assert_snapshot_does_not_exist(container, snapshot_regex)
+              for instance in ["nginx"]:
+                  assert_snapshot_does_not_exist(instance, snapshot_regex)
 
       with subtest("Smoke-test: prune"):
           out = run_lxd_snapper("prune")
 
-          assert "processed containers: 3" in out
+          assert "processed instances: 3" in out
           assert "deleted snapshots: 8" in out
           assert "kept snapshots: 8" in out
 
-          # Perform assertions for the `mysql` container
+          # Perform assertions for the `mysql` instance
           assert_snapshot_exists("mysql", "snap0")
           assert_snapshot_does_not_exist("mysql", "auto\-20120730\-1200\d{2}")
           assert_snapshot_exists("mysql", "auto\-20120731\-1200\d{2}")
@@ -157,10 +157,10 @@ import <nixpkgs/nixos/tests/make-test-python.nix> ({ pkgs, ... }:
           assert_snapshot_exists("mysql", "auto\-20120806\-1200\d{2}")
           assert_snapshot_count("mysql", ".*", 7)  # 1 manual + 6 automatic
 
-          # Perform assertions for the `nginx` container
+          # Perform assertions for the `nginx` instance
           assert_snapshot_count("nginx", ".*", 1)  # 1 manual
 
-          # Perform assertions for the `php` container
+          # Perform assertions for the `php` instance
           assert_snapshot_exists("php", "snap0")
           assert_snapshot_does_not_exist("php", "auto\-20120730\-1200\d{2}")
           assert_snapshot_does_not_exist("php", "auto\-20120731\-1200\d{2}")

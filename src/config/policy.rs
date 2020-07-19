@@ -1,4 +1,4 @@
-use lib_lxd::{LxdContainer, LxdContainerName, LxdContainerStatus, LxdProject, LxdProjectName};
+use lib_lxd::{LxdInstance, LxdInstanceName, LxdInstanceStatus, LxdProject, LxdProjectName};
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -10,11 +10,11 @@ pub struct Policy {
     pub included_projects: Option<HashSet<LxdProjectName>>,
     pub excluded_projects: Option<HashSet<LxdProjectName>>,
 
-    pub included_containers: Option<HashSet<LxdContainerName>>,
-    pub excluded_containers: Option<HashSet<LxdContainerName>>,
+    pub included_instances: Option<HashSet<LxdInstanceName>>,
+    pub excluded_instances: Option<HashSet<LxdInstanceName>>,
 
-    pub included_statuses: Option<HashSet<LxdContainerStatus>>,
-    pub excluded_statuses: Option<HashSet<LxdContainerStatus>>,
+    pub included_statuses: Option<HashSet<LxdInstanceStatus>>,
+    pub excluded_statuses: Option<HashSet<LxdInstanceStatus>>,
 
     pub keep_hourly: Option<usize>,
     pub keep_daily: Option<usize>,
@@ -54,12 +54,12 @@ impl Policy {
         self.keep_limit
     }
 
-    /// Returns whether this policy applies to given project and container.
+    /// Returns whether this policy applies to given project and instance.
     ///
-    /// For instance: if this policy is restricted to match only containers with
-    /// specified names, it will return `true` only for container matching
+    /// For instance: if this policy is restricted to match only instances with
+    /// specified names, it will return `true` only for instance matching
     /// those names.
-    pub fn applies_to(&self, project: &LxdProject, container: &LxdContainer) -> bool {
+    pub fn applies_to(&self, project: &LxdProject, instance: &LxdInstance) -> bool {
         fn in_set<T: Hash + Eq>(items: &Option<HashSet<T>>, item: &T, default: bool) -> bool {
             items
                 .as_ref()
@@ -68,16 +68,16 @@ impl Policy {
         }
 
         let project_excluded = in_set(&self.excluded_projects, &project.name, false);
-        let name_excluded = in_set(&self.excluded_containers, &container.name, false);
-        let status_excluded = in_set(&self.excluded_statuses, &container.status, false);
+        let name_excluded = in_set(&self.excluded_instances, &instance.name, false);
+        let status_excluded = in_set(&self.excluded_statuses, &instance.status, false);
 
         if project_excluded || name_excluded || status_excluded {
             return false;
         }
 
         let project_included = in_set(&self.included_projects, &project.name, true);
-        let name_included = in_set(&self.included_containers, &container.name, true);
-        let status_included = in_set(&self.included_statuses, &container.status, true);
+        let name_included = in_set(&self.included_instances, &instance.name, true);
+        let status_included = in_set(&self.included_statuses, &instance.status, true);
 
         project_included && name_included && status_included
     }
@@ -88,8 +88,8 @@ impl Policy {
         Self {
             included_projects: None,
             excluded_projects: None,
-            included_containers: None,
-            excluded_containers: None,
+            included_instances: None,
+            excluded_instances: None,
             included_statuses: None,
             excluded_statuses: None,
             keep_hourly: other.keep_hourly.or(self.keep_hourly),
@@ -121,35 +121,35 @@ mod tests {
         names.iter().map(LxdProjectName::new).collect()
     }
 
-    fn container_a() -> LxdContainer {
-        LxdContainer {
-            name: container_name("a"),
-            status: LxdContainerStatus::Running,
+    fn instance_a() -> LxdInstance {
+        LxdInstance {
+            name: instance_name("a"),
+            status: LxdInstanceStatus::Running,
             snapshots: Default::default(),
         }
     }
 
-    fn container_b() -> LxdContainer {
-        LxdContainer {
-            name: container_name("b"),
-            status: LxdContainerStatus::Aborting,
+    fn instance_b() -> LxdInstance {
+        LxdInstance {
+            name: instance_name("b"),
+            status: LxdInstanceStatus::Aborting,
             snapshots: Default::default(),
         }
     }
 
-    fn container_c() -> LxdContainer {
-        LxdContainer {
-            name: container_name("c"),
-            status: LxdContainerStatus::Stopped,
+    fn instance_c() -> LxdInstance {
+        LxdInstance {
+            name: instance_name("c"),
+            status: LxdInstanceStatus::Stopped,
             snapshots: Default::default(),
         }
     }
 
-    fn containers(names: &[&str]) -> HashSet<LxdContainerName> {
-        names.iter().map(LxdContainerName::new).collect()
+    fn instances(names: &[&str]) -> HashSet<LxdInstanceName> {
+        names.iter().map(LxdInstanceName::new).collect()
     }
 
-    fn statuses(statuses: &[LxdContainerStatus]) -> HashSet<LxdContainerStatus> {
+    fn statuses(statuses: &[LxdInstanceStatus]) -> HashSet<LxdInstanceStatus> {
         statuses.iter().cloned().collect()
     }
 
@@ -160,12 +160,12 @@ mod tests {
             use super::*;
 
             #[test]
-            fn applies_to_every_container() {
+            fn applies_to_every_instance() {
                 let policy = Policy::default();
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), true);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), true);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
             }
         }
 
@@ -173,15 +173,15 @@ mod tests {
             use super::*;
 
             #[test]
-            fn applies_only_to_containers_belonging_to_given_project() {
+            fn applies_only_to_instances_belonging_to_given_project() {
                 let policy = Policy {
                     included_projects: Some(projects(&["a", "d"])),
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), true);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), false);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), true);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), false);
             }
         }
 
@@ -189,47 +189,47 @@ mod tests {
             use super::*;
 
             #[test]
-            fn applies_to_all_containers_except_the_ones_belonging_to_given_project() {
+            fn applies_to_all_instances_except_the_ones_belonging_to_given_project() {
                 let policy = Policy {
                     excluded_projects: Some(projects(&["a", "d"])),
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), false);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), false);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
             }
         }
 
-        mod policy_with_included_containers {
+        mod policy_with_included_instances {
             use super::*;
 
             #[test]
-            fn applies_only_to_containers_with_given_names() {
+            fn applies_only_to_instances_with_given_names() {
                 let policy = Policy {
-                    included_containers: Some(containers(&["a", "d"])),
+                    included_instances: Some(instances(&["a", "d"])),
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), false);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), false);
             }
         }
 
-        mod policy_with_excluded_containers {
+        mod policy_with_excluded_instances {
             use super::*;
 
             #[test]
-            fn applies_to_all_containers_except_the_ones_with_given_names() {
+            fn applies_to_all_instances_except_the_ones_with_given_names() {
                 let policy = Policy {
-                    excluded_containers: Some(containers(&["a", "d"])),
+                    excluded_instances: Some(instances(&["a", "d"])),
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), false);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), true);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), false);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), true);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
             }
         }
 
@@ -237,18 +237,18 @@ mod tests {
             use super::*;
 
             #[test]
-            fn applies_only_to_containers_with_given_statuses() {
+            fn applies_only_to_instances_with_given_statuses() {
                 let policy = Policy {
                     included_statuses: Some(statuses(&[
-                        LxdContainerStatus::Aborting,
-                        LxdContainerStatus::Stopped,
+                        LxdInstanceStatus::Aborting,
+                        LxdInstanceStatus::Stopped,
                     ])),
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), false);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), true);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), false);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), true);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
             }
         }
 
@@ -256,61 +256,61 @@ mod tests {
             use super::*;
 
             #[test]
-            fn applies_to_all_containers_except_the_ones_with_given_statuses() {
+            fn applies_to_all_instances_except_the_ones_with_given_statuses() {
                 let policy = Policy {
                     excluded_statuses: Some(statuses(&[
-                        LxdContainerStatus::Aborting,
-                        LxdContainerStatus::Stopped,
+                        LxdInstanceStatus::Aborting,
+                        LxdInstanceStatus::Stopped,
                     ])),
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), false);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), false);
             }
         }
 
-        mod policy_with_included_projects_and_included_containers_and_included_statuses {
+        mod policy_with_included_projects_and_included_instances_and_included_statuses {
             use super::*;
 
             #[test]
-            fn applies_only_to_containers_with_given_projects_and_names_and_statuses() {
+            fn applies_only_to_instances_with_given_projects_and_names_and_statuses() {
                 let policy = Policy {
                     included_projects: Some(projects(&["b", "c"])),
-                    included_containers: Some(containers(&["c"])),
+                    included_instances: Some(instances(&["c"])),
                     included_statuses: Some(statuses(&[
-                        LxdContainerStatus::Aborting,
-                        LxdContainerStatus::Stopped,
+                        LxdInstanceStatus::Aborting,
+                        LxdInstanceStatus::Stopped,
                     ])),
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), false);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), false);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
             }
         }
 
-        mod policy_with_excluded_projects_and_excluded_containers_and_excluded_statuses {
+        mod policy_with_excluded_projects_and_excluded_instances_and_excluded_statuses {
             use super::*;
 
             #[test]
-            fn applies_to_all_containers_except_the_ones_with_given_projects_and_names_and_statuses(
-            ) {
+            fn applies_to_all_instances_except_the_ones_with_given_projects_and_names_and_statuses()
+            {
                 let policy = Policy {
                     excluded_projects: Some(projects(&["b", "c"])),
-                    excluded_containers: Some(containers(&["c"])),
+                    excluded_instances: Some(instances(&["c"])),
                     excluded_statuses: Some(statuses(&[
-                        LxdContainerStatus::Aborting,
-                        LxdContainerStatus::Stopped,
+                        LxdInstanceStatus::Aborting,
+                        LxdInstanceStatus::Stopped,
                     ])),
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &container_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &container_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &container_c()), false);
+                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
+                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
+                assert_eq!(policy.applies_to(&project_b(), &instance_c()), false);
             }
         }
     }

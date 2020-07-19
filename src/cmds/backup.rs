@@ -28,32 +28,32 @@ struct BackupCmd<'a> {
 
 impl<'a> BackupCmd<'a> {
     fn run(mut self) -> Result<()> {
-        writeln!(self.stdout, "Backing-up containers:")?;
+        writeln!(self.stdout, "Backing-up instances:")?;
 
         let mut summary = BackupSummary::default();
 
         for project in self.lxd.list_projects()? {
-            for container in self.lxd.list(&project.name)? {
-                self.try_backup_container(&mut summary, &project, &container)?;
+            for instance in self.lxd.list(&project.name)? {
+                self.try_backup_instance(&mut summary, &project, &instance)?;
             }
         }
 
         summary.print(self.stdout)
     }
 
-    fn try_backup_container(
+    fn try_backup_instance(
         &mut self,
         summary: &mut BackupSummary,
         project: &LxdProject,
-        container: &LxdContainer,
+        instance: &LxdInstance,
     ) -> Result<()> {
-        summary.processed_containers += 1;
+        summary.processed_instances += 1;
 
         writeln!(self.stdout)?;
-        writeln!(self.stdout, "- {}/{} ", project.name, container.name)?;
+        writeln!(self.stdout, "- {}/{} ", project.name, instance.name)?;
 
-        if self.config.policy(&project, &container).is_some() {
-            match self.backup_container(&project, &container) {
+        if self.config.policy(&project, &instance).is_some() {
+            match self.backup_instance(&project, &instance) {
                 Ok(_) => {
                     summary.created_snapshots += 1;
 
@@ -76,17 +76,17 @@ impl<'a> BackupCmd<'a> {
         Ok(())
     }
 
-    fn backup_container(
+    fn backup_instance(
         &mut self,
         project: &LxdProject,
-        container: &LxdContainer,
+        instance: &LxdInstance,
     ) -> Result<LxdSnapshotName> {
         let snapshot_name = self.config.snapshot_name((self.time)());
 
         writeln!(self.stdout, "-> creating snapshot: {}", snapshot_name)?;
 
         self.lxd
-            .create_snapshot(&project.name, &container.name, &snapshot_name)?;
+            .create_snapshot(&project.name, &instance.name, &snapshot_name)?;
 
         Ok(snapshot_name)
     }
@@ -104,7 +104,7 @@ mod tests {
         r#"
         policies:
           main:
-            excluded-containers: ['container-b']
+            excluded-instances: ['instance-b']
             included-statuses: ['Running']
         "#
     );
@@ -129,28 +129,28 @@ mod tests {
 
         let config = Config::from_code(POLICY);
 
-        let mut lxd = LxdDummyClient::new(vec![
-            LxdContainer {
-                name: container_name("container-a"),
-                status: LxdContainerStatus::Running,
+        let mut lxd = LxdFakeClient::new(vec![
+            LxdInstance {
+                name: instance_name("instance-a"),
+                status: LxdInstanceStatus::Running,
                 snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             },
             //
-            LxdContainer {
-                name: container_name("container-b"),
-                status: LxdContainerStatus::Running,
+            LxdInstance {
+                name: instance_name("instance-b"),
+                status: LxdInstanceStatus::Running,
                 snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             },
             //
-            LxdContainer {
-                name: container_name("container-c"),
-                status: LxdContainerStatus::Running,
+            LxdInstance {
+                name: instance_name("instance-c"),
+                status: LxdInstanceStatus::Running,
                 snapshots: Default::default(),
             },
             //
-            LxdContainer {
-                name: container_name("container-d"),
-                status: LxdContainerStatus::Stopped,
+            LxdInstance {
+                name: instance_name("instance-d"),
+                status: LxdInstanceStatus::Stopped,
                 snapshots: Default::default(),
             },
         ]);
@@ -159,37 +159,37 @@ mod tests {
 
         assert_out!(
             r#"
-            Backing-up containers:
+            Backing-up instances:
             
-            - default/container-a 
+            - default/instance-a 
             -> creating snapshot: auto-19700101-000000
             -> [ OK ]
             
-            - default/container-b 
+            - default/instance-b 
             -> [ EXCLUDED ]
             
-            - default/container-c 
+            - default/instance-c 
             -> creating snapshot: auto-19700101-000000
             -> [ OK ]
             
-            - default/container-d 
+            - default/instance-d 
             -> [ EXCLUDED ]
             
             Summary
-            - processed containers: 4
+            - processed instances: 4
             - created snapshots: 2
             "#,
             stdout
         );
 
-        let containers = lxd.list(&LxdProjectName::default()).unwrap();
+        let instances = lxd.list(&LxdProjectName::default()).unwrap();
 
-        // It's quite hard to compare containers 1:1 (like on other tests), because the
+        // It's quite hard to compare instances 1:1 (like on other tests), because the
         // newly-created snapshots have `created_at` equal to `now`
-        assert_eq!(4, containers.len());
-        assert_eq!(2, containers[0].snapshots.len());
-        assert_eq!(1, containers[1].snapshots.len());
-        assert_eq!(1, containers[2].snapshots.len());
-        assert_eq!(0, containers[3].snapshots.len());
+        assert_eq!(4, instances.len());
+        assert_eq!(2, instances[0].snapshots.len());
+        assert_eq!(1, instances[1].snapshots.len());
+        assert_eq!(1, instances[2].snapshots.len());
+        assert_eq!(0, instances[3].snapshots.len());
     }
 }

@@ -2,9 +2,9 @@ use serde::Deserialize;
 use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize)]
-pub struct LxdContainerName(String);
+pub struct LxdInstanceName(String);
 
-impl LxdContainerName {
+impl LxdInstanceName {
     pub fn new(name: impl AsRef<str>) -> Self {
         Self(name.as_ref().into())
     }
@@ -14,7 +14,7 @@ impl LxdContainerName {
     }
 }
 
-impl fmt::Display for LxdContainerName {
+impl fmt::Display for LxdInstanceName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }

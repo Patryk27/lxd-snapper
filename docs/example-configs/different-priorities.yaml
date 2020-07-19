@@ -14,5 +14,5 @@ policies:
     keep-limit: 2
 
   databases:
-    included-containers: ['mysql']
+    included-instances: ['mysql']
     keep-limit: 25

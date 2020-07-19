@@ -1,16 +1,16 @@
 use crate::*;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 
-pub fn container(name: &str) -> LxdContainer {
-    LxdContainer {
-        name: container_name(name),
-        status: LxdContainerStatus::Running,
+pub fn instance(name: &str) -> LxdInstance {
+    LxdInstance {
+        name: instance_name(name),
+        status: LxdInstanceStatus::Running,
         snapshots: Default::default(),
     }
 }
 
-pub fn container_name(name: &str) -> LxdContainerName {
-    LxdContainerName::new(name)
+pub fn instance_name(name: &str) -> LxdInstanceName {
+    LxdInstanceName::new(name)
 }
 
 pub fn project(name: &str) -> LxdProject {

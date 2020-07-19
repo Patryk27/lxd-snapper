@@ -1,10 +1,10 @@
 policies:
   apps:
-    included-containers: ['php']
+    included-instances: ['php']
     keep-daily: 1
     keep-monthly: 1
 
   databases:
-    included-containers: ['mysql']
+    included-instances: ['mysql']
     keep-daily: 4
     keep-monthly: 2

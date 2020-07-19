@@ -1,8 +1,8 @@
 use crate::config::Config;
 use lib_lxd::*;
 
-pub fn find_snapshots(config: &Config, container: &LxdContainer) -> Vec<LxdSnapshot> {
-    let mut snapshots: Vec<_> = container
+pub fn find_snapshots(config: &Config, instances: &LxdInstance) -> Vec<LxdSnapshot> {
+    let mut snapshots: Vec<_> = instances
         .snapshots
         .iter()
         .filter(|snapshot| config.is_snapshot_name(&snapshot.name))
@@ -34,10 +34,9 @@ mod tests {
     fn returns_only_snapshots_matching_format() {
         let config = Config::from_code(CONFIG);
 
-        let container = LxdContainer {
-            name: container_name("test"),
-            status: LxdContainerStatus::Running,
-
+        let instance = LxdInstance {
+            name: instance_name("test"),
+            status: LxdInstanceStatus::Running,
             snapshots: vec![
                 snapshot("snap-0", "2000-01-01 12:00:00"),
                 snapshot("auto", "2000-01-01 13:00:00"),
@@ -48,7 +47,7 @@ mod tests {
             ],
         };
 
-        let actual = find_snapshots(&config, &container);
+        let actual = find_snapshots(&config, &instance);
 
         let expected = vec![
             snapshot("auto-20000101-160000", "2000-01-01 16:00:00"),
@@ -63,10 +62,9 @@ mod tests {
     fn returns_snapshots_sorted_by_creation_date_descending() {
         let config = Config::from_code(CONFIG);
 
-        let container = LxdContainer {
-            name: container_name("test"),
-            status: LxdContainerStatus::Running,
-
+        let instance = LxdInstance {
+            name: instance_name("test"),
+            status: LxdInstanceStatus::Running,
             snapshots: vec![
                 snapshot("auto-1", "2012-08-24 12:34:56"),
                 snapshot("auto-2", "2012-08-24 12:36:56"),
@@ -75,7 +73,7 @@ mod tests {
             ],
         };
 
-        let actual = find_snapshots(&config, &container);
+        let actual = find_snapshots(&config, &instance);
 
         let expected = vec![
             snapshot("auto-2", "2012-08-24 12:36:56"),

@@ -6,7 +6,7 @@ use crate::config::Config;
 use anyhow::*;
 use clap::Clap;
 use colored::*;
-use lib_lxd::{LxdClient, LxdDummyClient, LxdProcessClient};
+use lib_lxd::{LxdClient, LxdFakeClient, LxdProcessClient};
 use std::io::stdout;
 use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
@@ -18,7 +18,7 @@ mod config;
 #[derive(Clap, Debug)]
 struct Args {
     /// Runs application in a simulated safe-mode without applying any changes
-    /// to the containers
+    /// to the instances
     #[clap(short, long)]
     dry_run: bool,
 
@@ -37,17 +37,20 @@ struct Args {
 
 #[derive(Clap, Debug)]
 enum Command {
-    /// Creates a snapshot for each container matching the policy
+    /// Creates a snapshot for each instance (i.e. container & virtual
+    /// machine) matching the policy
     Backup,
 
     /// Shorthand for `backup` followed by `prune`
     BackupAndPrune,
 
-    /// Removes *ALL* snapshots for each container matching the policy; you most
-    /// likely *don't* want to use it on production
+    /// Removes *ALL* snapshots for each instance (i.e. container & virtual
+    /// machine) matching the policy; you most likely *don't* want to use
+    /// it on production
     Nuke,
 
-    /// Removes stale snapshots for each container matching the policy
+    /// Removes stale snapshots for each instance (i.e. container & virtual
+    /// machine) matching the policy
     Prune,
 
     /// Validates policy's syntax
@@ -80,19 +83,19 @@ fn config(path: &Path) -> Result<Config> {
 
 fn lxd(dry_run: bool, lxc_path: Option<PathBuf>) -> Result<Box<dyn LxdClient>> {
     let mut lxd = if let Some(lxc_path) = lxc_path {
-        LxdProcessClient::new_ex(lxc_path)
+        LxdProcessClient::new(lxc_path)
     } else {
-        LxdProcessClient::new().context("Couldn't initialize LXC client")?
+        LxdProcessClient::new_from_path().context("Couldn't initialize LXC client")?
     };
 
-    if !dry_run {
-        return Ok(box lxd);
+    if dry_run {
+        println!(
+            "{} --dry-run is active, no changes will be applied\n",
+            "Note:".green(),
+        );
+
+        Ok(box LxdFakeClient::new_clone(&mut lxd)?)
+    } else {
+        Ok(box lxd)
     }
-
-    println!(
-        "{} --dry-run is active, no changes will be applied\n",
-        "Note:".green(),
-    );
-
-    Ok(box LxdDummyClient::from_other(&mut lxd)?)
 }

@@ -3,71 +3,61 @@ use chrono::Utc;
 use std::collections::BTreeMap;
 
 /// An in-memory implementation of the LXD client
-#[derive(Default)]
-pub struct LxdDummyClient {
+#[derive(Clone, Debug, Default)]
+pub struct LxdFakeClient {
     projects: BTreeMap<LxdProjectName, Project>,
 }
 
-type Project = BTreeMap<LxdContainerName, LxdContainer>;
+type Project = BTreeMap<LxdInstanceName, LxdInstance>;
 
-impl LxdDummyClient {
-    pub fn new(containers: Vec<LxdContainer>) -> Self {
-        containers
+impl LxdFakeClient {
+    pub fn new(instances: Vec<LxdInstance>) -> Self {
+        instances
             .into_iter()
-            .fold(LxdDummyClient::default(), |mut lxd, container| {
-                lxd.create_container(LxdProjectName::default(), container);
+            .fold(LxdFakeClient::default(), |mut lxd, instance| {
+                lxd.create_instance(LxdProjectName::default(), instance);
                 lxd
             })
     }
 
-    pub fn from_other(other: &mut impl LxdClient) -> Result<Self> {
-        let mut this = LxdDummyClient::default();
+    pub fn new_clone(other: &mut dyn LxdClient) -> Result<Self> {
+        let mut this = LxdFakeClient::default();
 
         for project in other.list_projects()? {
-            for container in other.list(&project.name)? {
-                this.create_container(project.name.clone(), container);
+            for instance in other.list(&project.name)? {
+                this.create_instance(project.name.clone(), instance);
             }
         }
 
         Ok(this)
     }
 
-    pub fn create_container(&mut self, project: LxdProjectName, container: LxdContainer) {
+    pub fn create_instance(&mut self, project: LxdProjectName, instance: LxdInstance) {
         self.projects
             .entry(project)
             .or_default()
-            .insert(container.name.clone(), container);
+            .insert(instance.name.clone(), instance);
     }
 
     fn project_mut(&mut self, project: &LxdProjectName) -> Option<&mut Project> {
         self.projects.get_mut(project)
     }
 
-    fn container_mut(
+    fn instance_mut(
         &mut self,
         project: &LxdProjectName,
-        container: &LxdContainerName,
-    ) -> Result<&mut LxdContainer> {
-        let instance: Option<_> = try { self.project_mut(project)?.get_mut(container)? };
+        instance: &LxdInstanceName,
+    ) -> Result<&mut LxdInstance> {
+        let instance_obj: Option<_> = try { self.project_mut(project)?.get_mut(instance)? };
 
-        instance.ok_or_else(|| Error::NoSuchContainer {
+        instance_obj.ok_or_else(|| Error::NoSuchInstance {
             project: project.to_owned(),
-            container: container.to_owned(),
+            instance: instance.to_owned(),
         })
     }
 }
 
-impl LxdClient for LxdDummyClient {
-    fn list(&mut self, project: &LxdProjectName) -> Result<Vec<LxdContainer>> {
-        if let Some(project) = self.project_mut(project) {
-            Ok(project.values().cloned().collect())
-        } else {
-            // This is consistent with behavior of the `lxc` CLI, which also returns just an
-            // empty set for non-existing projects
-            Ok(Default::default())
-        }
-    }
-
+impl LxdClient for LxdFakeClient {
     fn list_projects(&mut self) -> Result<Vec<LxdProject>> {
         Ok(self
             .projects
@@ -77,27 +67,37 @@ impl LxdClient for LxdDummyClient {
             .collect())
     }
 
+    fn list(&mut self, project: &LxdProjectName) -> Result<Vec<LxdInstance>> {
+        if let Some(project) = self.project_mut(project) {
+            Ok(project.values().cloned().collect())
+        } else {
+            // This is consistent with behavior of the `lxc` CLI, which also returns just an
+            // empty set for non-existing projects
+            Ok(Default::default())
+        }
+    }
+
     fn create_snapshot(
         &mut self,
         project_name: &LxdProjectName,
-        container_name: &LxdContainerName,
+        instance_name: &LxdInstanceName,
         snapshot_name: &LxdSnapshotName,
-    ) -> Result {
-        let container = self.container_mut(project_name, container_name)?;
+    ) -> Result<()> {
+        let instance = self.instance_mut(project_name, instance_name)?;
 
-        if container
+        if instance
             .snapshots
             .iter()
             .any(|snapshot| &snapshot.name == snapshot_name)
         {
             return Err(Error::SnapshotAlreadyExists {
                 project: project_name.to_owned(),
-                container: container_name.to_owned(),
+                instance: instance_name.to_owned(),
                 snapshot: snapshot_name.to_owned(),
             });
         }
 
-        container.snapshots.push(LxdSnapshot {
+        instance.snapshots.push(LxdSnapshot {
             name: snapshot_name.to_owned(),
             created_at: Utc::now(),
         });
@@ -108,22 +108,22 @@ impl LxdClient for LxdDummyClient {
     fn delete_snapshot(
         &mut self,
         project_name: &LxdProjectName,
-        container_name: &LxdContainerName,
+        instance_name: &LxdInstanceName,
         snapshot_name: &LxdSnapshotName,
-    ) -> Result {
-        let container = self.container_mut(project_name, container_name)?;
+    ) -> Result<()> {
+        let instance = self.instance_mut(project_name, instance_name)?;
 
-        let snapshot_idx = container
+        let snapshot_idx = instance
             .snapshots
             .iter()
             .position(|snapshot| &snapshot.name == snapshot_name)
             .ok_or_else(|| Error::NoSuchSnapshot {
                 project: project_name.to_owned(),
-                container: container_name.to_owned(),
+                instance: instance_name.to_owned(),
                 snapshot: snapshot_name.to_owned(),
             })?;
 
-        container.snapshots.remove(snapshot_idx);
+        instance.snapshots.remove(snapshot_idx);
 
         Ok(())
     }
@@ -135,17 +135,33 @@ mod tests {
     use crate::*;
     use pretty_assertions as pa;
 
+    mod list_projects {
+        use super::*;
+
+        #[test]
+        fn returns_names_of_existing_projects() {
+            let mut lxd = LxdFakeClient::default();
+
+            lxd.create_instance(project_name("first"), instance("foo"));
+            lxd.create_instance(project_name("second"), instance("bar"));
+
+            pa::assert_eq!(
+                Ok(vec![project("first"), project("second")]),
+                lxd.list_projects(),
+            );
+        }
+    }
+
     mod list {
         use super::*;
 
-        fn lxd() -> LxdDummyClient {
-            let mut lxd = LxdDummyClient::default();
+        fn lxd() -> LxdFakeClient {
+            let mut lxd = LxdFakeClient::default();
 
-            lxd.create_container(project_name("first"), container("foo"));
-            lxd.create_container(project_name("first"), container("bar"));
-            lxd.create_container(project_name("second"), container("zar"));
-            lxd.create_container(project_name("third"), container("dar"));
-
+            lxd.create_instance(project_name("first"), instance("foo"));
+            lxd.create_instance(project_name("first"), instance("bar"));
+            lxd.create_instance(project_name("second"), instance("zar"));
+            lxd.create_instance(project_name("third"), instance("dar"));
             lxd
         }
 
@@ -153,21 +169,21 @@ mod tests {
             use super::*;
 
             #[test]
-            fn returns_names_of_containers_inside_that_project() {
+            fn returns_names_of_instances_inside_that_project() {
                 let mut lxd = lxd();
 
                 pa::assert_eq!(
-                    Ok(vec![container("bar"), container("foo")]),
+                    Ok(vec![instance("bar"), instance("foo")]),
                     lxd.list(&LxdProjectName::new("first"))
                 );
 
                 pa::assert_eq!(
-                    Ok(vec![container("zar")]),
+                    Ok(vec![instance("zar")]),
                     lxd.list(&LxdProjectName::new("second"))
                 );
 
                 pa::assert_eq!(
-                    Ok(vec![container("dar")]),
+                    Ok(vec![instance("dar")]),
                     lxd.list(&LxdProjectName::new("third"))
                 );
             }
@@ -188,27 +204,10 @@ mod tests {
         }
     }
 
-    mod list_projects {
-        use super::*;
-
-        #[test]
-        fn returns_names_of_existing_projects() {
-            let mut lxd = LxdDummyClient::default();
-
-            lxd.create_container(project_name("first"), container("foo"));
-            lxd.create_container(project_name("second"), container("bar"));
-
-            pa::assert_eq!(
-                Ok(vec![project("first"), project("second")]),
-                lxd.list_projects(),
-            );
-        }
-    }
-
     mod create_snapshot {
         use super::*;
 
-        mod given_an_existing_container {
+        mod given_an_existing_instance {
             use super::*;
 
             mod and_an_existing_snapshot {
@@ -216,26 +215,26 @@ mod tests {
 
                 #[test]
                 fn returns_snapshot_already_exists() {
-                    let mut lxd = LxdDummyClient::default();
+                    let mut lxd = LxdFakeClient::default();
 
-                    lxd.create_container(
+                    lxd.create_instance(
                         LxdProjectName::default(),
-                        LxdContainer {
-                            name: container_name("foo"),
-                            status: LxdContainerStatus::Running,
+                        LxdInstance {
+                            name: instance_name("foo"),
+                            status: LxdInstanceStatus::Running,
                             snapshots: vec![snapshot("bar", "2000-01-01 12:00:00")],
                         },
                     );
 
                     let actual = lxd.create_snapshot(
                         &LxdProjectName::default(),
-                        &container_name("foo"),
+                        &instance_name("foo"),
                         &snapshot_name("bar"),
                     );
 
                     let expected = Err(Error::SnapshotAlreadyExists {
                         project: LxdProjectName::default(),
-                        container: container_name("foo"),
+                        instance: instance_name("foo"),
                         snapshot: snapshot_name("bar"),
                     });
 
@@ -248,49 +247,49 @@ mod tests {
 
                 #[test]
                 fn creates_snapshot() {
-                    let mut lxd = LxdDummyClient::default();
+                    let mut lxd = LxdFakeClient::default();
 
-                    lxd.create_container(
+                    lxd.create_instance(
                         LxdProjectName::default(),
-                        LxdContainer {
-                            name: container_name("foo"),
-                            status: LxdContainerStatus::Running,
+                        LxdInstance {
+                            name: instance_name("foo"),
+                            status: LxdInstanceStatus::Running,
                             snapshots: Default::default(),
                         },
                     );
 
                     lxd.create_snapshot(
                         &LxdProjectName::default(),
-                        &container_name("foo"),
+                        &instance_name("foo"),
                         &snapshot_name("bar"),
                     )
                     .unwrap();
 
-                    let containers = lxd.list(&LxdProjectName::default()).unwrap();
+                    let instances = lxd.list(&LxdProjectName::default()).unwrap();
 
-                    pa::assert_eq!(containers.len(), 1);
-                    pa::assert_eq!(containers[0].snapshots.len(), 1);
-                    pa::assert_eq!(containers[0].snapshots[0].name, snapshot_name("bar"));
+                    pa::assert_eq!(instances.len(), 1);
+                    pa::assert_eq!(instances[0].snapshots.len(), 1);
+                    pa::assert_eq!(instances[0].snapshots[0].name, snapshot_name("bar"));
                 }
             }
         }
 
-        mod given_a_missing_container {
+        mod given_a_missing_instance {
             use super::*;
 
             #[test]
-            fn returns_no_such_container() {
-                let mut lxd = LxdDummyClient::default();
+            fn returns_no_such_instance() {
+                let mut lxd = LxdFakeClient::default();
 
                 let actual = lxd.create_snapshot(
                     &LxdProjectName::default(),
-                    &container_name("foo"),
+                    &instance_name("foo"),
                     &snapshot_name("bar"),
                 );
 
-                let expected = Err(Error::NoSuchContainer {
+                let expected = Err(Error::NoSuchInstance {
                     project: LxdProjectName::default(),
-                    container: container_name("foo"),
+                    instance: instance_name("foo"),
                 });
 
                 pa::assert_eq!(expected, actual);
@@ -301,7 +300,7 @@ mod tests {
     mod delete_snapshot {
         use super::*;
 
-        mod given_an_existing_container {
+        mod given_an_existing_instance {
             use super::*;
 
             mod and_an_existing_snapshot {
@@ -309,28 +308,28 @@ mod tests {
 
                 #[test]
                 fn deletes_snapshot() {
-                    let mut lxd = LxdDummyClient::default();
+                    let mut lxd = LxdFakeClient::default();
 
-                    lxd.create_container(
+                    lxd.create_instance(
                         LxdProjectName::default(),
-                        LxdContainer {
-                            name: container_name("foo"),
-                            status: LxdContainerStatus::Running,
+                        LxdInstance {
+                            name: instance_name("foo"),
+                            status: LxdInstanceStatus::Running,
                             snapshots: vec![snapshot("bar", "2000-01-01 12:00:00")],
                         },
                     );
 
                     lxd.delete_snapshot(
                         &LxdProjectName::default(),
-                        &container_name("foo"),
+                        &instance_name("foo"),
                         &snapshot_name("bar"),
                     )
                     .unwrap();
 
-                    let containers = lxd.list(&LxdProjectName::default()).unwrap();
+                    let instances = lxd.list(&LxdProjectName::default()).unwrap();
 
-                    pa::assert_eq!(containers.len(), 1);
-                    pa::assert_eq!(containers[0].snapshots.len(), 0);
+                    pa::assert_eq!(instances.len(), 1);
+                    pa::assert_eq!(instances[0].snapshots.len(), 0);
                 }
             }
 
@@ -339,26 +338,26 @@ mod tests {
 
                 #[test]
                 fn returns_no_such_snapshot() {
-                    let mut lxd = LxdDummyClient::default();
+                    let mut lxd = LxdFakeClient::default();
 
-                    lxd.create_container(
+                    lxd.create_instance(
                         LxdProjectName::default(),
-                        LxdContainer {
-                            name: container_name("foo"),
-                            status: LxdContainerStatus::Running,
+                        LxdInstance {
+                            name: instance_name("foo"),
+                            status: LxdInstanceStatus::Running,
                             snapshots: Default::default(),
                         },
                     );
 
                     let actual = lxd.delete_snapshot(
                         &LxdProjectName::default(),
-                        &container_name("foo"),
+                        &instance_name("foo"),
                         &snapshot_name("bar"),
                     );
 
                     let expected = Err(Error::NoSuchSnapshot {
                         project: LxdProjectName::default(),
-                        container: container_name("foo"),
+                        instance: instance_name("foo"),
                         snapshot: snapshot_name("bar"),
                     });
 
@@ -367,22 +366,22 @@ mod tests {
             }
         }
 
-        mod given_a_missing_container {
+        mod given_a_missing_instance {
             use super::*;
 
             #[test]
-            fn returns_no_such_container() {
-                let mut lxd = LxdDummyClient::default();
+            fn returns_no_such_instance() {
+                let mut lxd = LxdFakeClient::default();
 
                 let actual = lxd.delete_snapshot(
                     &LxdProjectName::default(),
-                    &container_name("foo"),
+                    &instance_name("foo"),
                     &snapshot_name("bar"),
                 );
 
-                let expected = Err(Error::NoSuchContainer {
+                let expected = Err(Error::NoSuchInstance {
                     project: LxdProjectName::default(),
-                    container: container_name("foo"),
+                    instance: instance_name("foo"),
                 });
 
                 pa::assert_eq!(expected, actual);

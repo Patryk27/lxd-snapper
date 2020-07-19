@@ -27,32 +27,32 @@ struct PruneCmd<'a> {
 
 impl<'a> PruneCmd<'a> {
     fn run(mut self) -> Result<()> {
-        writeln!(self.stdout, "Pruning containers:")?;
+        writeln!(self.stdout, "Pruning instances:")?;
 
         let mut summary = PruneSummary::default();
 
         for project in self.lxd.list_projects()? {
-            for container in self.lxd.list(&project.name)? {
-                self.try_prune_container(&mut summary, &project, &container)?;
+            for instance in self.lxd.list(&project.name)? {
+                self.try_prune_instance(&mut summary, &project, &instance)?;
             }
         }
 
         summary.print(self.stdout)
     }
 
-    fn try_prune_container(
+    fn try_prune_instance(
         &mut self,
         summary: &mut PruneSummary,
         project: &LxdProject,
-        container: &LxdContainer,
+        instance: &LxdInstance,
     ) -> Result<()> {
-        summary.processed_containers += 1;
+        summary.processed_instances += 1;
 
         writeln!(self.stdout)?;
-        writeln!(self.stdout, "- {}/{}", project.name, container.name)?;
+        writeln!(self.stdout, "- {}/{}", project.name, instance.name)?;
 
-        if let Some(policy) = self.config.policy(project, container) {
-            match self.prune_container(project, container, &policy) {
+        if let Some(policy) = self.config.policy(project, instance) {
+            match self.prune_instance(project, instance, &policy) {
                 Ok((deleted_snapshots, kept_snapshots)) => {
                     summary.deleted_snapshots += deleted_snapshots;
                     summary.kept_snapshots += kept_snapshots;
@@ -76,16 +76,16 @@ impl<'a> PruneCmd<'a> {
         Ok(())
     }
 
-    fn prune_container(
+    fn prune_instance(
         &mut self,
         project: &LxdProject,
-        container: &LxdContainer,
+        instance: &LxdInstance,
         policy: &Policy,
     ) -> Result<(usize, usize)> {
         let mut deleted_snapshots = 0;
         let mut kept_snapshots = 0;
 
-        let snapshots = find_snapshots(&self.config, container);
+        let snapshots = find_snapshots(&self.config, instance);
         let snapshots_to_keep = find_snapshots_to_keep(policy, &snapshots);
 
         for snapshot in &snapshots {
@@ -99,7 +99,7 @@ impl<'a> PruneCmd<'a> {
                 writeln!(self.stdout, "-> deleting snapshot: {}", snapshot.name)?;
 
                 self.lxd
-                    .delete_snapshot(&project.name, &container.name, &snapshot.name)?;
+                    .delete_snapshot(&project.name, &instance.name, &snapshot.name)?;
             }
         }
 
@@ -119,7 +119,7 @@ mod tests {
         r#"
         policies:
           main:
-            excluded-containers: ['container-b']
+            excluded-instances: ['instance-b']
             keep-last: 2
         "#
     );
@@ -130,10 +130,10 @@ mod tests {
 
         let config = Config::from_code(POLICY);
 
-        let mut lxd = LxdDummyClient::new(vec![
-            LxdContainer {
-                name: container_name("container-a"),
-                status: LxdContainerStatus::Running,
+        let mut lxd = LxdFakeClient::new(vec![
+            LxdInstance {
+                name: instance_name("instance-a"),
+                status: LxdInstanceStatus::Running,
                 snapshots: vec![
                     snapshot("manual-1", "2000-01-01 12:00:00"),
                     snapshot("auto-1", "2000-01-01 13:00:00"),
@@ -144,9 +144,9 @@ mod tests {
                 ],
             },
             //
-            LxdContainer {
-                name: container_name("container-b"),
-                status: LxdContainerStatus::Running,
+            LxdInstance {
+                name: instance_name("instance-b"),
+                status: LxdInstanceStatus::Running,
                 snapshots: vec![
                     snapshot("manual-1", "2000-01-01 12:00:00"),
                     snapshot("auto-1", "2000-01-01 13:00:00"),
@@ -156,9 +156,9 @@ mod tests {
                 ],
             },
             //
-            LxdContainer {
-                name: container_name("container-c"),
-                status: LxdContainerStatus::Running,
+            LxdInstance {
+                name: instance_name("instance-c"),
+                status: LxdInstanceStatus::Running,
                 snapshots: vec![
                     snapshot("manual-1", "2000-01-01 12:00:00"),
                     snapshot("auto-1", "2000-01-01 13:00:00"),
@@ -172,25 +172,25 @@ mod tests {
 
         assert_out!(
             r#"
-            Pruning containers:
+            Pruning instances:
             
-            - default/container-a
+            - default/instance-a
             -> keeping snapshot: auto-4
             -> keeping snapshot: auto-3
             -> deleting snapshot: auto-2
             -> deleting snapshot: auto-1
             -> [ OK ]
             
-            - default/container-b
+            - default/instance-b
             -> [ EXCLUDED ]
             
-            - default/container-c
+            - default/instance-c
             -> keeping snapshot: auto-2
             -> keeping snapshot: auto-1
             -> [ OK ]
             
             Summary
-            - processed containers: 3
+            - processed instances: 3
             - deleted snapshots: 2
             - kept snapshots: 4
             "#,
@@ -199,9 +199,9 @@ mod tests {
 
         pa::assert_eq!(
             vec![
-                LxdContainer {
-                    name: container_name("container-a"),
-                    status: LxdContainerStatus::Running,
+                LxdInstance {
+                    name: instance_name("instance-a"),
+                    status: LxdInstanceStatus::Running,
                     snapshots: vec![
                         snapshot("manual-1", "2000-01-01 12:00:00"),
                         snapshot("auto-3", "2000-01-01 15:00:00"),
@@ -210,9 +210,9 @@ mod tests {
                     ],
                 },
                 //
-                LxdContainer {
-                    name: container_name("container-b"),
-                    status: LxdContainerStatus::Running,
+                LxdInstance {
+                    name: instance_name("instance-b"),
+                    status: LxdInstanceStatus::Running,
                     snapshots: vec![
                         snapshot("manual-1", "2000-01-01 12:00:00"),
                         snapshot("auto-1", "2000-01-01 13:00:00"),
@@ -222,9 +222,9 @@ mod tests {
                     ],
                 },
                 //
-                LxdContainer {
-                    name: container_name("container-c"),
-                    status: LxdContainerStatus::Running,
+                LxdInstance {
+                    name: instance_name("instance-c"),
+                    status: LxdInstanceStatus::Running,
                     snapshots: vec![
                         snapshot("manual-1", "2000-01-01 12:00:00"),
                         snapshot("auto-1", "2000-01-01 13:00:00"),

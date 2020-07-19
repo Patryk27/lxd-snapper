@@ -3,7 +3,7 @@ use std::io::Write;
 
 #[derive(Default)]
 pub struct BackupSummary {
-    pub processed_containers: usize,
+    pub processed_instances: usize,
     pub created_snapshots: usize,
     pub errors: usize,
 }
@@ -11,19 +11,19 @@ pub struct BackupSummary {
 impl BackupSummary {
     pub fn print(self, stdout: &mut dyn Write) -> Result<()> {
         if self.errors != 0 {
-            bail!("Some containers failed to be backed-up");
+            bail!("Some instances failed to be backed-up");
         }
 
-        if self.processed_containers == 0 {
-            bail!("Found no containers");
+        if self.processed_instances == 0 {
+            bail!("Found no instances");
         }
 
         writeln!(stdout)?;
         writeln!(stdout, "Summary")?;
         writeln!(
             stdout,
-            "- processed containers: {}",
-            self.processed_containers
+            "- processed instances: {}",
+            self.processed_instances
         )?;
         writeln!(stdout, "- created snapshots: {}", self.created_snapshots)?;
 

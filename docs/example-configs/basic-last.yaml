@@ -1,5 +1,5 @@
 # This is the most simple configuration - it will keep the five latest
-# snapshots for each container.
+# snapshots for each instance.
 #
 # For instance:
 #
@@ -14,5 +14,5 @@
 # in this directory.
 
 policies:
-  every-container:
+  every-instance:
     keep-last: 5

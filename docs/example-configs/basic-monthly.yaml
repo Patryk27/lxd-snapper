@@ -1,13 +1,13 @@
-# This is a simple configuration that backs-up all the containers, keeping a
+# This is a simple configuration that backs-up all the instances, keeping a
 # maximum of one snapshot per end-of-day (for five most recent days) and one
 # snapshot per end-of-month (for two consecutive months).
 #
-# Overall, it will keep a maximum of 5+2=7 snapshots for each container, with
+# Overall, it will keep a maximum of 5+2=7 snapshots for each instance, with
 # the oldest snapshot being the one from two/three months ago.
 #
 # Assuming that today is 2015-06-01 and you've been doing daily backups, using
 # this configuration you would end up with backups for following days (for each
-# container):
+# instance):
 #
 # - 2015-06-01 (thanks to keep-daily)
 # - 2015-05-31 (thanks to keep-daily)
@@ -18,6 +18,6 @@
 # - 2015-03-31 (thanks to keep-monthly)
 
 policies:
-  every-container:
+  every-instance:
     keep-daily: 5
     keep-monthly: 2

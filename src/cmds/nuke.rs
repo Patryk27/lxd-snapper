@@ -4,20 +4,20 @@ use lib_lxd::*;
 use std::io::Write;
 
 crate fn nuke(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
-    writeln!(stdout, "Nuking containers:")?;
+    writeln!(stdout, "Nuking instances:")?;
 
     for project in lxd.list_projects()? {
-        for container in lxd.list(&project.name)? {
-            if config.policy(&project, &container).is_none() {
+        for instance in lxd.list(&project.name)? {
+            if config.policy(&project, &instance).is_none() {
                 continue;
             }
 
             writeln!(stdout)?;
-            writeln!(stdout, "- {}/{}", project.name, container.name)?;
+            writeln!(stdout, "- {}/{}", project.name, instance.name)?;
 
-            for snapshot in container.snapshots {
+            for snapshot in instance.snapshots {
                 writeln!(stdout, "-> deleting snapshot: {}", snapshot.name)?;
-                lxd.delete_snapshot(&project.name, &container.name, &snapshot.name)?;
+                lxd.delete_snapshot(&project.name, &instance.name, &snapshot.name)?;
             }
         }
     }
@@ -33,32 +33,32 @@ mod tests {
     use lib_lxd::test_utils::*;
     use pretty_assertions as pa;
 
-    fn containers() -> Vec<LxdContainer> {
+    fn instances() -> Vec<LxdInstance> {
         vec![
-            LxdContainer {
-                name: container_name("container-a"),
-                status: LxdContainerStatus::Running,
+            LxdInstance {
+                name: instance_name("instance-a"),
+                status: LxdInstanceStatus::Running,
                 snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             },
             //
-            LxdContainer {
-                name: container_name("container-b"),
-                status: LxdContainerStatus::Running,
+            LxdInstance {
+                name: instance_name("instance-b"),
+                status: LxdInstanceStatus::Running,
                 snapshots: vec![
                     snapshot("snapshot-1", "2000-01-01 12:00:00"),
                     snapshot("snapshot-2", "2000-01-01 13:00:00"),
                 ],
             },
             //
-            LxdContainer {
-                name: container_name("container-c"),
-                status: LxdContainerStatus::Stopping,
+            LxdInstance {
+                name: instance_name("instance-c"),
+                status: LxdInstanceStatus::Stopping,
                 snapshots: Default::default(),
             },
             //
-            LxdContainer {
-                name: container_name("container-d"),
-                status: LxdContainerStatus::Stopped,
+            LxdInstance {
+                name: instance_name("instance-d"),
+                status: LxdInstanceStatus::Stopped,
                 snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             },
         ]
@@ -71,21 +71,21 @@ mod tests {
         fn deletes_no_snapshots() {
             let mut stdout = Vec::new();
             let config = Config::default();
-            let mut lxd = LxdDummyClient::new(containers());
+            let mut lxd = LxdFakeClient::new(instances());
 
             nuke(&mut stdout, &config, &mut lxd).unwrap();
 
             assert_out!(
                 r#"
-                Nuking containers:
+                Nuking instances:
                 "#,
                 stdout
             );
 
-            let actual_containers = lxd.list(&LxdProjectName::default()).unwrap();
-            let expected_containers = containers();
+            let actual_instances = lxd.list(&LxdProjectName::default()).unwrap();
+            let expected_instances = instances();
 
-            pa::assert_eq!(expected_containers, actual_containers);
+            pa::assert_eq!(expected_instances, actual_instances);
         }
     }
 
@@ -101,21 +101,21 @@ mod tests {
         );
 
         #[test]
-        fn deletes_snapshots_only_for_containers_matching_that_policy() {
+        fn deletes_snapshots_only_for_instances_matching_that_policy() {
             let mut stdout = Vec::new();
             let config = Config::from_code(POLICY);
-            let mut lxd = LxdDummyClient::new(containers());
+            let mut lxd = LxdFakeClient::new(instances());
 
             nuke(&mut stdout, &config, &mut lxd).unwrap();
 
             assert_out!(
                 r#"
-                Nuking containers:
+                Nuking instances:
                 
-                - default/container-a
+                - default/instance-a
                 -> deleting snapshot: snapshot-1
                 
-                - default/container-b
+                - default/instance-b
                 -> deleting snapshot: snapshot-1
                 -> deleting snapshot: snapshot-2
                 "#,
@@ -124,27 +124,27 @@ mod tests {
 
             pa::assert_eq!(
                 vec![
-                    LxdContainer {
-                        name: container_name("container-a"),
-                        status: LxdContainerStatus::Running,
+                    LxdInstance {
+                        name: instance_name("instance-a"),
+                        status: LxdInstanceStatus::Running,
                         snapshots: Default::default(),
                     },
                     //
-                    LxdContainer {
-                        name: container_name("container-b"),
-                        status: LxdContainerStatus::Running,
+                    LxdInstance {
+                        name: instance_name("instance-b"),
+                        status: LxdInstanceStatus::Running,
                         snapshots: Default::default(),
                     },
                     //
-                    LxdContainer {
-                        name: container_name("container-c"),
-                        status: LxdContainerStatus::Stopping,
+                    LxdInstance {
+                        name: instance_name("instance-c"),
+                        status: LxdInstanceStatus::Stopping,
                         snapshots: Default::default(),
                     },
                     //
-                    LxdContainer {
-                        name: container_name("container-d"),
-                        status: LxdContainerStatus::Stopped,
+                    LxdInstance {
+                        name: instance_name("instance-d"),
+                        status: LxdInstanceStatus::Stopped,
                         snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
                     },
                 ],

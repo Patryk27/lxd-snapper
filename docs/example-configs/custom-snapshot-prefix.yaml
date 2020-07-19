@@ -3,5 +3,5 @@
 snapshot-name-prefix: 'magic-'
 
 policies:
-  every-container:
+  every-instance:
     keep-last: 5
