@@ -52,6 +52,8 @@ fn validate_config(config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
         bail!("No instance matches any of the policies");
     }
 
+    println!(".. [ OK ]");
+
     Ok(())
 }
 
