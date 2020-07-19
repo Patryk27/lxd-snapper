@@ -2,9 +2,10 @@ let
   pkgs = import <nixpkgs> { };
 
 in
-  pkgs.mkShell {
-    buildInputs = with pkgs; [
-      lld
-      rustup
-    ];
-  }
+pkgs.mkShell {
+  buildInputs = with pkgs; [
+    lld
+    nixpkgs-fmt
+    rustup
+  ];
+}
