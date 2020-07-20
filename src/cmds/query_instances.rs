@@ -1,7 +1,8 @@
 use crate::config::{Config, Policy};
 use anyhow::Result;
 use colored::Colorize;
-use lib_lxd::LxdClient;
+use lib_lxd::*;
+use prettytable::{cell, row, Table};
 use std::io::Write;
 
 crate fn query_instances(
@@ -9,20 +10,18 @@ crate fn query_instances(
     config: &Config,
     lxd: &mut dyn LxdClient,
 ) -> Result<()> {
-    writeln!(stdout, "Found instances:")?;
+    let mut table = Table::new();
+
+    table.set_titles(row!["Project", "Instance", "Policies"]);
 
     for project in lxd.list_projects()? {
         for instance in lxd.list(&project.name)? {
             let policies = format_policies(config.policies(&project, &instance));
-
-            writeln!(
-                stdout,
-                "- {} with policy: {}",
-                format!("{}/{}", project.name, instance.name).green(),
-                policies,
-            )?;
+            table.add_row(row![project.name, instance.name, policies]);
         }
     }
+
+    write!(stdout, "{}", table)?;
 
     Ok(())
 }
@@ -31,11 +30,85 @@ fn format_policies(policies: Vec<(&str, &Policy)>) -> String {
     if policies.is_empty() {
         "NONE".yellow().to_string()
     } else {
-        let names: Vec<_> = policies
-            .iter()
-            .map(|(name, _)| name.green().to_string())
-            .collect();
-
+        let names: Vec<_> = policies.iter().map(|(name, _)| *name).collect();
         names.join(" + ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::assert_out;
+    use indoc::indoc;
+    use lib_lxd::test_utils::*;
+
+    const POLICY: &str = indoc!(
+        r#"
+        policies:
+          _running:
+            included-statuses: ['Running']
+            
+          databases:
+            included-instances: ['mysql', 'redis']
+        "#
+    );
+
+    #[test]
+    fn test() {
+        let mut stdout = Vec::new();
+        let config = Config::from_code(POLICY);
+
+        let mut lxd = LxdFakeClient::new(vec![
+            LxdInstance {
+                name: instance_name("ruby"),
+                status: LxdInstanceStatus::Running,
+                snapshots: Default::default(),
+            },
+            //
+            LxdInstance {
+                name: instance_name("rust"),
+                status: LxdInstanceStatus::Running,
+                snapshots: Default::default(),
+            },
+            //
+            LxdInstance {
+                name: instance_name("mysql"),
+                status: LxdInstanceStatus::Running,
+                snapshots: Default::default(),
+            },
+            //
+            LxdInstance {
+                name: instance_name("redis"),
+                status: LxdInstanceStatus::Stopped,
+                snapshots: Default::default(),
+            },
+            //
+            LxdInstance {
+                name: instance_name("outlander"),
+                status: LxdInstanceStatus::Stopped,
+                snapshots: Default::default(),
+            },
+        ]);
+
+        query_instances(&mut stdout, &config, &mut lxd).unwrap();
+
+        assert_out!(
+            r#"
+            +---------+-----------+----------------------+
+            | Project | Instance  | Policies             |
+            +=========+===========+======================+
+            | default | mysql     | _running + databases |
+            +---------+-----------+----------------------+
+            | default | outlander | NONE                 |
+            +---------+-----------+----------------------+
+            | default | redis     | databases            |
+            +---------+-----------+----------------------+
+            | default | ruby      | _running             |
+            +---------+-----------+----------------------+
+            | default | rust      | _running             |
+            +---------+-----------+----------------------+
+            "#,
+            stdout
+        );
     }
 }
