@@ -111,7 +111,7 @@ fn init_lxd(dry_run: bool, lxc_path: Option<PathBuf>) -> Result<Box<dyn LxdClien
     if dry_run {
         println!(
             "{} --dry-run is active, no changes will be applied\n",
-            "Note:".green(),
+            "note:".green(),
         );
 
         Ok(box LxdFakeClient::new_clone(&mut lxd)?)
