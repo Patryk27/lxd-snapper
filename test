@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+set -e
+
+nix-build ./test.nix --no-out-link

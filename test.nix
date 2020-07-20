@@ -4,10 +4,11 @@
 # Since we piggy-back on the `nixos/tests` facilities, this test doesn't have any implicit
 # dependencies, nor does it alter any machine's state in any way.
 #
-# To launch tests, please run:
-# $ nix-build ./test.nix
+# To launch these tests, please run:
+# $ ./test
 #
-# On a more or less recent computer, all tests should complete in around 3 minutes.
+# On a more or less recent computer, all tests should complete in around 3 minutes (although they
+# will take a bit longer the first time).
 let
   host-pkgs = import <nixpkgs> { };
 
