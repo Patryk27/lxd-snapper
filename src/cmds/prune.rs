@@ -127,7 +127,6 @@ mod tests {
     #[test]
     fn test() {
         let mut stdout = Vec::new();
-
         let config = Config::from_code(POLICY);
 
         let mut lxd = LxdFakeClient::new(vec![
