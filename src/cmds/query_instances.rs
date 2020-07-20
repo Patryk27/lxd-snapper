@@ -41,6 +41,7 @@ mod tests {
     use crate::assert_out;
     use indoc::indoc;
     use lib_lxd::test_utils::*;
+    use std::env::set_var;
 
     const POLICY: &str = indoc!(
         r#"
@@ -90,6 +91,7 @@ mod tests {
             },
         ]);
 
+        set_var("NO_COLOR", "1");
         query_instances(&mut stdout, &config, &mut lxd).unwrap();
 
         assert_out!(
