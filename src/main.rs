@@ -26,9 +26,8 @@ struct Args {
     #[clap(short, long, default_value = "config.yaml")]
     config: PathBuf,
 
-    /// By default, lxd-snapper tries to locate the `lxc` executable inside your
-    /// PATH variable - when this fails for you, using this parameter you can
-    /// provide location of the `lxc` executable by hand
+    /// Path to the `lxc` executable; usually inferred automatically from the
+    /// `PATH` environmental variable
     #[clap(short, long)]
     lxc_path: Option<PathBuf>,
 
@@ -38,15 +37,13 @@ struct Args {
 
 #[derive(Clap, Debug)]
 enum Command {
-    /// Creates a snapshot for each instance (i.e. container & virtual
-    /// machine) matching the policy
+    /// Creates a snapshot for each instance matching the policy
     Backup,
 
     /// Shorthand for `backup` followed by `prune`
     BackupAndPrune,
 
-    /// Removes stale snapshots for each instance (i.e. container & virtual
-    /// machine) matching the policy
+    /// Removes stale snapshots for each instance matching the policy
     Prune,
 
     /// Validates policy's syntax

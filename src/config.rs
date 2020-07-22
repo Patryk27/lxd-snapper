@@ -232,8 +232,8 @@ mod tests {
         }
 
         #[test]
-        fn different_priorities() {
-            let config = config("different-priorities");
+        fn cascading() {
+            let config = config("cascading");
 
             // -------- //
             // Client A //
@@ -245,8 +245,7 @@ mod tests {
                 "php",
                 LxdInstanceStatus::Running,
                 Some(Policy {
-                    keep_daily: Some(10),
-                    keep_limit: Some(5),
+                    keep_last: Some(15),
                     ..Default::default()
                 }),
             );
@@ -258,8 +257,7 @@ mod tests {
                 "mysql",
                 LxdInstanceStatus::Running,
                 Some(Policy {
-                    keep_daily: Some(10),
-                    keep_limit: Some(25),
+                    keep_last: Some(25),
                     ..Default::default()
                 }),
             );
@@ -274,8 +272,7 @@ mod tests {
                 "php",
                 LxdInstanceStatus::Running,
                 Some(Policy {
-                    keep_daily: Some(10),
-                    keep_limit: Some(5),
+                    keep_last: Some(15),
                     ..Default::default()
                 }),
             );
@@ -287,8 +284,7 @@ mod tests {
                 "mysql",
                 LxdInstanceStatus::Running,
                 Some(Policy {
-                    keep_daily: Some(10),
-                    keep_limit: Some(25),
+                    keep_last: Some(25),
                     ..Default::default()
                 }),
             );
@@ -303,8 +299,7 @@ mod tests {
                 "php",
                 LxdInstanceStatus::Running,
                 Some(Policy {
-                    keep_daily: Some(10),
-                    keep_limit: Some(2),
+                    keep_last: Some(5),
                     ..Default::default()
                 }),
             );
@@ -316,8 +311,7 @@ mod tests {
                 "mysql",
                 LxdInstanceStatus::Running,
                 Some(Policy {
-                    keep_daily: Some(10),
-                    keep_limit: Some(25),
+                    keep_last: Some(25),
                     ..Default::default()
                 }),
             );
@@ -332,8 +326,7 @@ mod tests {
                 "php",
                 LxdInstanceStatus::Running,
                 Some(Policy {
-                    keep_daily: Some(10),
-                    keep_limit: Some(1),
+                    keep_last: Some(2),
                     ..Default::default()
                 }),
             );
@@ -345,8 +338,7 @@ mod tests {
                 "mysql",
                 LxdInstanceStatus::Running,
                 Some(Policy {
-                    keep_daily: Some(10),
-                    keep_limit: Some(25),
+                    keep_last: Some(25),
                     ..Default::default()
                 }),
             );

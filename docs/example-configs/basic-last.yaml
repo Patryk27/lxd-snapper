@@ -4,12 +4,12 @@
 # For instance:
 #
 # - if you run `./lxd-snapper backup-and-prune` once every hour, with this
-#   configuration you'll have backups for the past five hours.
+#   configuration you'll have snapshots spanning for the past five hours.
 #
 # - if you run `./lxd-snapper backup-and-prune` once every day, with this
-#   configuration you'll have backups for the past five days.
+#   configuration you'll have snapshots spanning for the past five days.
 #
-# If you seek more elaborate configurations (e.g. to keep one backup for each
+# If you seek more elaborate configurations (e.g. to keep one snapshot for each
 # day and one for each month), please take a look into other `basic-*` examples
 # in this directory.
 
