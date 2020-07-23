@@ -2,4 +2,7 @@
 
 set -e
 
+# There's no need to manually invoke `cargo test`, because it already happens
+# as a part of building `default.nix` (which is included via `test.nix`)
+
 nix-build ./test.nix --no-out-link
