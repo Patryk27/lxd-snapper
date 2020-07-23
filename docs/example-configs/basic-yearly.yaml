@@ -1,0 +1,40 @@
+# This is a bit more elaborate variant of `basic-monthly`.
+#
+# This configuration will keep a maximum of fourteen snapshots per end-of-day,
+# six snapshots per end-of-month, and two snapshots per end-of-year.
+#
+# Overall, it will keep a maximum of 14+6+2=22 snapshots for each instance,
+# with the oldest snapshot being the one from two/three years ago.
+#
+# Assuming that today is 2015-06-01 and you've been doing snapshots daily,
+# using this configuration you would end up with snapshots for the following
+# days (for each instance):
+#
+# - 2015-06-01 (thanks to keep-daily)
+# - 2015-05-31 (thanks to keep-daily)
+# - 2015-05-30 (thanks to keep-daily)
+# - 2015-05-29 (thanks to keep-daily)
+# - 2015-05-28 (thanks to keep-daily)
+# - 2015-05-27 (thanks to keep-daily)
+# - 2015-05-26 (thanks to keep-daily)
+# - 2015-05-25 (thanks to keep-daily)
+# - 2015-05-24 (thanks to keep-daily)
+# - 2015-05-23 (thanks to keep-daily)
+# - 2015-05-22 (thanks to keep-daily)
+# - 2015-05-21 (thanks to keep-daily)
+# - 2015-05-20 (thanks to keep-daily)
+# - 2015-05-19 (thanks to keep-daily)
+# - 2015-04-30 (thanks to keep-monthly)
+# - 2015-03-31 (thanks to keep-monthly)
+# - 2015-02-28 (thanks to keep-monthly)
+# - 2015-01-31 (thanks to keep-monthly)
+# - 2014-12-31 (thanks to keep-monthly)
+# - 2014-11-30 (thanks to keep-monthly)
+# - 2013-12-31 (thanks to keep-yearly)
+# - 2012-12-31 (thanks to keep-yearly)
+
+policies:
+  every-instance:
+    keep-daily: 14
+    keep-monthly: 6
+    keep-yearly: 2

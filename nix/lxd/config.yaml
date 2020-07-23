@@ -1,0 +1,20 @@
+storage_pools:
+  - name: default
+    driver: zfs
+    config:
+      source: tank
+
+networks:
+  - name: lxdbr0
+    type: bridge
+    config:
+      ipv4.address: auto
+      ipv6.address: none
+
+profiles:
+  - name: default
+    devices:
+      root:
+        path: /
+        pool: default
+        type: disk

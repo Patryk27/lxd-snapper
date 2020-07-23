@@ -1,0 +1,56 @@
+# This configuration presents the feature of cascading policies.
+#
+# In order to explain it, first let's imagine we have following instances set
+# up:
+#
+#   Project  | Instance
+#   -------- | --------
+#   default  | nginx
+#   client-a | php
+#   client-a | mysql
+#   client-c | php
+#   client-c | mysql
+#
+# Now - we'd like for every instance to have at least two snapshots (just for
+# some quick accident recovery), with the exception of:
+#
+# - important clients, for which we'd like to keep latest 15 snapshots,
+#
+# - unimportant clients, for which we'd like to keep latest 5 snapshots,
+#
+# - databases (doesn't matter for which client!), for which we'd like to keep
+#   the latest 25 snapshots.
+#
+# That's what cascading policies are for - when an instance matches many
+# policies (e.g. like the `mysql` instance inside each of our sample projects
+# does), what happens is that lxd-snapper _squashes_ all of the matching
+# policies, overwriting duplicated properties.
+#
+# This allows you to reduce the amount of duplicated rules, because you can
+# just extract the "core" policies to the top of the file and overwrite them
+# for some selected instances below.
+#
+# For example, in case of the `client-a/mysql` instance, lxd-snapper first
+# finds the `important-clients` policy, but then it notices that the
+# `databases` policy matches `mysql` too; the `keep-last` from `databases`
+# takes over the priority (because it's _below_ `important-clients`) and voilà.
+#
+# The README.md provides a bit more interesting example with similar use-case
+# in mind; you'll find this feature the most useful when dealing with instances
+# scattered among different projects.
+
+policies:
+  everyone:
+    keep-last: 2
+
+  important-clients:
+    included-projects: ['client-a', 'client-b']
+    keep-last: 15
+
+  unimportant-clients:
+    included-projects: ['client-c']
+    keep-last: 5
+
+  databases:
+    included-instances: ['mysql']
+    keep-last: 25
