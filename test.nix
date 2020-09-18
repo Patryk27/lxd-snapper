@@ -11,6 +11,7 @@
 # will take a bit longer the first time).
 let
   host-pkgs = import <nixpkgs> { };
+  lxd-snapper = ((import ./default.nix).default) + "/bin/lxd-snapper";
 
   launch-test = { pkgs }: import <nixpkgs/nixos/tests/make-test-python.nix>
     ({ ... }:
@@ -22,10 +23,7 @@ let
         # the concrete distribution doesn't matter.
         lxd-alpine-meta = ./nix/lxd/alpine-meta.tar.xz;
         lxd-alpine-rootfs = ./nix/lxd/alpine-rootfs.tar.xz;
-
         lxd-config = ./nix/lxd/config.yaml;
-
-        lxd-snapper = (import ./default.nix) + "/bin/lxd-snapper";
         lxd-snapper-config = ./nix/lxd-snapper/config.yaml;
 
       in
