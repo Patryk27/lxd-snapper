@@ -57,7 +57,13 @@ enum Command {
 }
 
 #[derive(Clap, Debug)]
-enum DebugCommand {
+struct DebugCommand {
+    #[clap(subcommand)]
+    cmd: DebugSubcommand,
+}
+
+#[derive(Clap, Debug)]
+enum DebugSubcommand {
     /// Removes *ALL* snapshots (including the ones created manually) for each
     /// instance (i.e. container & virtual machine) matching the policy; if
     /// you suddenly created tons of unnecessary snapshots, this is the way to
@@ -66,7 +72,13 @@ enum DebugCommand {
 }
 
 #[derive(Clap, Debug)]
-enum QueryCommand {
+struct QueryCommand {
+    #[clap(subcommand)]
+    cmd: QuerySubcommand,
+}
+
+#[derive(Clap, Debug)]
+enum QuerySubcommand {
     /// Lists all the LXD instances together with policies associated with them
     Instances,
 }
@@ -84,13 +96,20 @@ fn main() -> Result<()> {
 
     match args.cmd {
         Command::Backup => cmds::backup(stdout, &config, lxd.deref_mut()),
+
         Command::BackupAndPrune => cmds::backup_and_prune(stdout, &config, lxd.deref_mut()),
+
         Command::Prune => cmds::prune(stdout, &config, lxd.deref_mut()),
+
         Command::Validate => unreachable!(),
-        Command::Debug(DebugCommand::Nuke) => cmds::debug_nuke(stdout, &config, lxd.deref_mut()),
-        Command::Query(QueryCommand::Instances) => {
-            cmds::query_instances(stdout, &config, lxd.deref_mut())
-        }
+
+        Command::Debug(DebugCommand {
+            cmd: DebugSubcommand::Nuke,
+        }) => cmds::debug_nuke(stdout, &config, lxd.deref_mut()),
+
+        Command::Query(QueryCommand {
+            cmd: QuerySubcommand::Instances,
+        }) => cmds::query_instances(stdout, &config, lxd.deref_mut()),
     }
 }
 
