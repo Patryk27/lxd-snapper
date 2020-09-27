@@ -46,7 +46,7 @@ lxd-snapper leans on a single configuration file, written in YAML, that contains
 which _instances_ (or _projects_, or _statuses_) it matches, and defines retention strategies for snapshots of those
 matching containers / virtual machines.
 
-Being practical, let's start with a minimalist's configuration:
+Being practical, let's start with the minimalist's configuration:
 
 ```yaml
 policies:
