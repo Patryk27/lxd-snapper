@@ -42,13 +42,13 @@ $ git clone https://github.com/Patryk27/lxd-snapper
 $ git clone https://github.com/Patryk27/lxd-snapper
     && cd lxd-snapper
     && nix-build
-    && cp result/bin/lxd-snapper .
+    && ./result/bin/lxd-snapper
 
 # Or using Nix (v3):
 $ git clone https://github.com/Patryk27/lxd-snapper
     && cd lxd-snapper
     && nix build
-    && cp result/bin/lxd-snapper .
+    && ./result/bin/lxd-snapper
 ```
 
 ## Configuring
