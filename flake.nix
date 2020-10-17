@@ -9,12 +9,6 @@
 
     naersk = {
       url = "github:nmattia/naersk";
-
-      inputs = {
-        nixpkgs = {
-          follows = "nixpkgs";
-        };
-      };
     };
 
     nixpkgs = {
@@ -29,33 +23,45 @@
 
   outputs = { self, gitignore, naersk, nixpkgs, nixpkgs-mozilla }:
     let
-      pkgs = (import nixpkgs) {
-        system = "x86_64-linux";
+      build = { system }:
+        let
+          pkgs = (import nixpkgs) {
+            inherit system;
 
-        overlays = [
-          (import "${nixpkgs-mozilla}")
-        ];
-      };
+            overlays = [
+              (import "${nixpkgs-mozilla}")
+            ];
+          };
 
-      rust-pkg = (pkgs.rustChannelOf {
-        rustToolchain = ./rust-toolchain;
-        sha256 = "GpVvKLc8e4l5URj7YsJfgm2OwsNw35zhpGD/9Jzdt2o=";
-      }).rust;
+          rust = (pkgs.rustChannelOf {
+            rustToolchain = ./rust-toolchain;
+            sha256 = "GpVvKLc8e4l5URj7YsJfgm2OwsNw35zhpGD/9Jzdt2o=";
+          }).rust.override {
+            targets = [ "i686-unknown-linux-musl" ];
+          };
 
-      gitignoreSource = (pkgs.callPackage gitignore { }).gitignoreSource;
+          gitignoreSource = (pkgs.callPackage gitignore { }).gitignoreSource;
 
-      buildPackage = (pkgs.callPackage naersk {
-        cargo = rust-pkg;
-        rustc = rust-pkg;
-      }).buildPackage;
+          buildPackage = (pkgs.callPackage naersk {
+            cargo = rust;
+            rustc = rust;
+          }).buildPackage;
 
-    in
-    {
-      defaultPackage = {
-        x86_64-linux = buildPackage {
+        in buildPackage {
           src = gitignoreSource ./.;
           doCheck = true;
           cargoTestOptions = args: args ++ [ "--all" ];
+          CARGO_BUILD_TARGET = "i686-unknown-linux-musl";
+        };
+
+    in {
+      defaultPackage = {
+        i686-linux = build {
+          system = "i686-linux";
+        };
+
+        x86_64-linux = build {
+          system = "x86_64-linux";
         };
       };
     };
