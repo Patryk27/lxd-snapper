@@ -2,17 +2,16 @@
 
 **LXD snapshots, automated.**
 
-lxd-snapper is a tool that automates creating & removing LXD snapshots.
+lxd-snapper is a tool that automates creating & removing LXD snapshots: just setup a snapshotting policy, add a systemd
+timer (or cron, or whatever scheduling mechanism you use) and enjoy your containers.
 
-With lxd-snapper you can set up various snapshotting-policies for your containers, making it easy to - say - keep
-_hourly_ snapshots of your databases and _daily_ snapshots of, say, instances of minio.
-
-On a high-level, this tool is a fancy wrapper for `lxc snapshot` & `lxc delete`; it's similar to the LXD's built-in
-`snapshots.schedule`, just more configurable.
+tl;dr it's a fancy wrapper for `lxc snapshot` & `lxc delete`; kinda like LXD's built-in `snapshots.schedule`, just more
+configurable.
 
 # Requirements
 
 - LXD 4+
+- Linux (i386 or x86_64)
 
 # Getting started
 
@@ -21,6 +20,10 @@ On a high-level, this tool is a fancy wrapper for `lxc snapshot` & `lxc delete`;
 You can either download pre-built binaries:
 
 ```bash
+# i386:
+$ wget https://github.com/Patryk27/lxd-snapper/releases/download/1.0.0/lxd-snapper-linux32 -O lxd-snapper
+
+# x86_64:
 $ wget https://github.com/Patryk27/lxd-snapper/releases/download/1.0.0/lxd-snapper-linux64 -O lxd-snapper
 ```
 
@@ -33,20 +36,26 @@ $ git clone https://github.com/Patryk27/lxd-snapper
     && cargo build --release
     && ./target/release/lxd-snapper
 
-# Using Nix:
+# Or using Nix (v2):
 $ git clone https://github.com/Patryk27/lxd-snapper
     && cd lxd-snapper
     && nix-build
+    && cp result/bin/lxd-snapper .
+
+# Or using Nix (v3):
+$ git clone https://github.com/Patryk27/lxd-snapper
+    && cd lxd-snapper
+    && nix build
     && cp result/bin/lxd-snapper .
 ```
 
 ## Configuring
 
-lxd-snapper leans on a single configuration file, written in YAML, that contains **policies**; each policy describes
-which _instances_ (or _projects_, or _statuses_) it matches, and defines retention strategies for snapshots of those
-matching containers / virtual machines.
+lxd-snapper requires a single configuration file, written in YAML, that defines **policies**; each policy describes
+which LXD _instances_ (or _projects_, or _statuses_) it matches, and defines retention strategies for snapshots of those
+matching instances (so _containers_ or _virtual machines_).
 
-Being practical, let's start with the minimalist's configuration:
+Being practical, let's start with a minimal configuration:
 
 ```yaml
 policies:
@@ -58,8 +67,9 @@ This configuration defines a single policy that applies to _all_ of the instance
 use LXD projects) and basically tells lxd-snapper that for each instance you want to keep five of its _latest_ snapshots
 around.
 
-That is: if you ran lxd-snapper each hour (e.g. using cron), each instance would contain snapshots spanning up to five
-latest hours; if you ran lxd-snapper each day - five latest days.
+You can go ahead and try it locally by saving that configuration into `config.yaml` and running
+`lxd-snapper -c config.yaml --dry-run backup` - thanks to the `--dry-run` switch, no changes will be actually applied,
+you'll just see what _would_ happen.
 
 ----
 
@@ -338,7 +348,7 @@ SUBCOMMANDS:
     validate            Validates policy's syntax
 ```
 
-# Configuration file
+# Configuration file syntax
 
 ```yaml
 snapshot-name-prefix: 'auto-'
@@ -397,7 +407,7 @@ policies:
     keep-limit: 1
 ```
 
-# Edge cases
+# Edge cases worth knowing about
 
 - When an instance inside `included-instances` / `excluded-instances` or project inside `included-projects` /
   `excluded-projects` refers to an entity that does not exist (say, `included-instances: ['rick-roll']`), the missing
@@ -405,10 +415,9 @@ policies:
 
 # Disclaimer
 
-Snapshots are _not_ a replacement for backups - to keep your data safe, please use snapshots and backups together,
-wisely.
+Snapshots are _not_ a replacement for backups - to keep your data safe, use snapshots and backups together, wisely.
 
 # License
 
-Copyright (c) 2019-2020, Patryk Wychowaniec <wychowaniec.patryk@gmail.com>.
+Copyright (c) 2019-2020, Patryk Wychowaniec <wychowaniec.patryk@gmail.com>.    
 Licensed under the MIT license.
