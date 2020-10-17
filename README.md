@@ -21,10 +21,12 @@ You can either download pre-built binaries:
 
 ```bash
 # i386:
-$ wget https://github.com/Patryk27/lxd-snapper/releases/download/1.0.0/lxd-snapper-linux32 -O lxd-snapper
+$ wget https://github.com/Patryk27/lxd-snapper/releases/download/v1.0/lxd-snapper-linux32 -O lxd-snapper
+$ chmod u+x lxd-snapper
 
 # x86_64:
-$ wget https://github.com/Patryk27/lxd-snapper/releases/download/1.0.0/lxd-snapper-linux64 -O lxd-snapper
+$ wget https://github.com/Patryk27/lxd-snapper/releases/download/v1.0/lxd-snapper-linux64 -O lxd-snapper
+$ chmod u+x lxd-snapper
 ```
 
 ... or build it on your own:
