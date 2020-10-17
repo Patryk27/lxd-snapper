@@ -23,7 +23,7 @@
 
   outputs = { self, gitignore, naersk, nixpkgs, nixpkgs-mozilla }:
     let
-      build = { system }:
+      build = { system, target, RUSTFLAGS }:
         let
           pkgs = (import nixpkgs) {
             inherit system;
@@ -37,7 +37,7 @@
             rustToolchain = ./rust-toolchain;
             sha256 = "GpVvKLc8e4l5URj7YsJfgm2OwsNw35zhpGD/9Jzdt2o=";
           }).rust.override {
-            targets = [ "i686-unknown-linux-musl" ];
+            targets = [ target ];
           };
 
           gitignoreSource = (pkgs.callPackage gitignore { }).gitignoreSource;
@@ -48,20 +48,26 @@
           }).buildPackage;
 
         in buildPackage {
+          inherit RUSTFLAGS;
+
           src = gitignoreSource ./.;
           doCheck = true;
           cargoTestOptions = args: args ++ [ "--all" ];
-          CARGO_BUILD_TARGET = "i686-unknown-linux-musl";
+          CARGO_BUILD_TARGET = target;
         };
 
     in {
       defaultPackage = {
         i686-linux = build {
           system = "i686-linux";
+          target = "i686-unknown-linux-musl";
+          RUSTFLAGS = "";
         };
 
         x86_64-linux = build {
           system = "x86_64-linux";
+          target = "x86_64-unknown-linux-musl";
+          RUSTFLAGS = "-C relocation-model=dynamic-no-pic";
         };
       };
     };
