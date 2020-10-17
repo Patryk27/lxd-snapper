@@ -286,7 +286,7 @@ in
     sha256 = "1428qilgk9h9w0lka0xmjnrkllyz16kny1afz3asr0qnr63wyzdk";
   };
 
-  lxd = launch-test {
+  lxd-latest = launch-test {
     pkgs = host-pkgs;
   };
 }
