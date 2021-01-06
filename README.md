@@ -13,6 +13,10 @@ configurable.
 - LXD 4+
 - Linux (i386 or x86_64)
 
+Plus, if you plan on compiling this application locally:
+
+- Cargo & Rust 1.49+ (nightly)
+
 # Getting started
 
 ## Downloading
