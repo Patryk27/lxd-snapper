@@ -25,11 +25,11 @@ Plus, if you plan on compiling this application locally:
 You can either download pre-built binaries:
 
 ```bash
-# i386:
+# i686
 $ wget https://github.com/Patryk27/lxd-snapper/releases/download/v1.1/lxd-snapper-linux32 -O lxd-snapper
 $ chmod u+x lxd-snapper
 
-# x86_64:
+# x86_64
 $ wget https://github.com/Patryk27/lxd-snapper/releases/download/v1.1/lxd-snapper-linux64 -O lxd-snapper
 $ chmod u+x lxd-snapper
 ```
