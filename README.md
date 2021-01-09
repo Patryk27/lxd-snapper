@@ -37,19 +37,19 @@ $ chmod u+x lxd-snapper
 ... or build it on your own:
 
 ```bash
-# Using Cargo:
+# Using Cargo
 $ git clone https://github.com/Patryk27/lxd-snapper
     && cd lxd-snapper
     && cargo build --release
     && ./target/release/lxd-snapper
 
-# Or using Nix (v2):
+# (or) Using Nix v1
 $ git clone https://github.com/Patryk27/lxd-snapper
     && cd lxd-snapper
     && nix-build
     && ./result/bin/lxd-snapper
 
-# Or using Nix (v3):
+# (or) Using Nix v2 / v3
 $ git clone https://github.com/Patryk27/lxd-snapper
     && cd lxd-snapper
     && nix build
