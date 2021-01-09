@@ -16,6 +16,7 @@ configurable.
 Plus, if you plan on compiling this application locally:
 
 - Cargo & Rust 1.49
+- Nix (for running integration tests)
 
 # Getting started
 
