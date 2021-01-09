@@ -15,7 +15,7 @@ configurable.
 
 Plus, if you plan on compiling this application locally:
 
-- Cargo & Rust 1.49+ (nightly)
+- Cargo & Rust 1.49
 
 # Getting started
 

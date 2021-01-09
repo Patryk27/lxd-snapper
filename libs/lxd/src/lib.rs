@@ -1,7 +1,5 @@
 //! A minimal implementation of the LXD client for use in `lxd-snapper`.
 
-#![feature(try_blocks)]
-
 pub use self::{clients::*, error::*, models::*, result::*};
 
 mod clients;

@@ -9,6 +9,12 @@
 
     naersk = {
       url = "github:nmattia/naersk";
+
+      inputs = {
+        nixpkgs = {
+          follows = "nixpkgs";
+        };
+      };
     };
 
     nixpkgs = {
@@ -35,7 +41,7 @@
 
           rust = (pkgs.rustChannelOf {
             rustToolchain = ./rust-toolchain;
-            sha256 = "GpVvKLc8e4l5URj7YsJfgm2OwsNw35zhpGD/9Jzdt2o=";
+            sha256 = "sha256-KCh2UBGtdlBJ/4UOqZlxUtcyefv7MH1neoVNV4z0nWs=";
           }).rust.override {
             targets = [ target ];
           };
@@ -43,11 +49,11 @@
           gitignoreSource = (pkgs.callPackage gitignore { }).gitignoreSource;
 
           buildPackage = (pkgs.callPackage naersk {
-            cargo = rust;
             rustc = rust;
           }).buildPackage;
 
-        in buildPackage {
+        in
+        buildPackage {
           inherit RUSTFLAGS;
 
           src = gitignoreSource ./.;
@@ -56,7 +62,8 @@
           CARGO_BUILD_TARGET = target;
         };
 
-    in {
+    in
+    {
       defaultPackage = {
         i686-linux = build {
           system = "i686-linux";

@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use lib_lxd::LxdClient;
 use std::ops::DerefMut;
 
-crate fn validate(args: Args) -> Result<()> {
+pub(crate) fn validate(args: Args) -> Result<()> {
     let config = load_config(&args)?;
     println!();
 

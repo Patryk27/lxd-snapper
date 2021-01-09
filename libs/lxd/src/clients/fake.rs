@@ -20,7 +20,7 @@ impl LxdFakeClient {
             })
     }
 
-    pub fn new_clone(other: &mut dyn LxdClient) -> Result<Self> {
+    pub fn wrap(other: &mut dyn LxdClient) -> Result<Self> {
         let mut this = LxdFakeClient::default();
 
         for project in other.list_projects()? {
@@ -48,12 +48,12 @@ impl LxdFakeClient {
         project: &LxdProjectName,
         instance: &LxdInstanceName,
     ) -> Result<&mut LxdInstance> {
-        let instance_obj: Option<_> = try { self.project_mut(project)?.get_mut(instance)? };
-
-        instance_obj.ok_or_else(|| Error::NoSuchInstance {
-            project: project.to_owned(),
-            instance: instance.to_owned(),
-        })
+        self.project_mut(project)
+            .and_then(|project| project.get_mut(instance))
+            .ok_or_else(|| Error::NoSuchInstance {
+                project: project.to_owned(),
+                instance: instance.to_owned(),
+            })
     }
 }
 

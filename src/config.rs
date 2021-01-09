@@ -24,10 +24,10 @@ impl Config {
     pub fn from_file(file: impl AsRef<Path>) -> Result<Self> {
         let file = file.as_ref();
 
-        let result: Result<Self> = try {
+        let result: Result<Self> = (|| {
             let code = fs::read_to_string(file).context("Couldn't read file")?;
-            serde_yaml::from_str(&code).context("Couldn't parse file")?
-        };
+            serde_yaml::from_str(&code).context("Couldn't parse file")
+        })();
 
         result.with_context(|| format!("Couldn't load configuration from: {}", file.display()))
     }

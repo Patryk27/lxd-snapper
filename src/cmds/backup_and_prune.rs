@@ -3,7 +3,7 @@ use anyhow::Result;
 use lib_lxd::*;
 use std::io::Write;
 
-crate fn backup_and_prune(
+pub(crate) fn backup_and_prune(
     stdout: &mut dyn Write,
     config: &Config,
     lxd: &mut dyn LxdClient,

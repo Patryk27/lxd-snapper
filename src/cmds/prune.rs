@@ -10,7 +10,7 @@ mod find_snapshots;
 mod find_snapshots_to_keep;
 mod summary;
 
-crate fn prune(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
+pub(crate) fn prune(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
     PruneCmd {
         stdout,
         config,

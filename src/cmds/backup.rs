@@ -9,7 +9,7 @@ use self::summary::*;
 
 mod summary;
 
-crate fn backup(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
+pub(crate) fn backup(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
     BackupCmd {
         time: Utc::now,
         stdout,

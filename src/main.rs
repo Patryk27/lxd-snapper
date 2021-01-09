@@ -1,7 +1,3 @@
-#![feature(box_syntax)]
-#![feature(crate_visibility_modifier)]
-#![feature(try_blocks)]
-
 use crate::config::Config;
 use anyhow::*;
 use clap::Clap;
@@ -130,8 +126,8 @@ fn init_lxd(dry_run: bool, lxc_path: Option<PathBuf>) -> Result<Box<dyn LxdClien
             "note:".green(),
         );
 
-        Ok(box LxdFakeClient::new_clone(&mut lxd)?)
+        Ok(Box::new(LxdFakeClient::wrap(&mut lxd)?))
     } else {
-        Ok(box lxd)
+        Ok(Box::new(lxd))
     }
 }

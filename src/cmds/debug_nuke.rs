@@ -3,7 +3,7 @@ use anyhow::Result;
 use lib_lxd::*;
 use std::io::Write;
 
-crate fn debug_nuke(
+pub(crate) fn debug_nuke(
     stdout: &mut dyn Write,
     config: &Config,
     lxd: &mut dyn LxdClient,
