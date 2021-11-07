@@ -1,13 +1,13 @@
 //! A minimal implementation of the LXD client for use in `lxd-snapper`.
 
-pub use self::{clients::*, error::*, models::*, result::*};
-
 mod clients;
 mod error;
 mod models;
 mod result;
 
 pub mod test_utils;
+
+pub use self::{clients::*, error::*, models::*, result::*};
 
 pub trait LxdClient {
     /// Returns all the projects.

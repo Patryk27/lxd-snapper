@@ -5,7 +5,7 @@ use lib_lxd::*;
 use prettytable::{cell, row, Table};
 use std::io::Write;
 
-pub(crate) fn query_instances(
+pub fn query_instances(
     stdout: &mut dyn Write,
     config: &Config,
     lxd: &mut dyn LxdClient,

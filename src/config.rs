@@ -1,14 +1,13 @@
+mod policy;
+
 use anyhow::*;
 use chrono::{DateTime, TimeZone};
 use indexmap::IndexMap;
 use lib_lxd::{LxdInstance, LxdProject, LxdSnapshotName};
-use serde::export::fmt::Display;
 use serde::Deserialize;
-use std::{fs, path::Path};
+use std::{fmt::Display, fs, path::Path};
 
 pub use self::policy::*;
-
-mod policy;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -35,7 +34,7 @@ impl Config {
     /// Load settings from given YAML code.
     #[cfg(test)]
     pub fn from_code(code: &str) -> Self {
-        serde_yaml::from_str(&code).unwrap()
+        serde_yaml::from_str(code).unwrap()
     }
 
     /// Builds snapshot name for given date & time.

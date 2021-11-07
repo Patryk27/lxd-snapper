@@ -13,10 +13,17 @@ pub struct LxdProcessClient {
 }
 
 impl LxdProcessClient {
-    pub fn new(lxc: impl AsRef<Path>) -> Self {
-        Self {
-            lxc: lxc.as_ref().into(),
+    pub fn new(lxc: impl AsRef<Path>) -> Result<Self> {
+        let lxc = lxc.as_ref();
+
+        if !lxc.exists() {
+            return Err(Error::Other(anyhow!(
+                "Couldn't find the `lxc` executable: {}",
+                lxc.display()
+            )));
         }
+
+        Ok(Self { lxc: lxc.into() })
     }
 
     pub fn new_from_path() -> Result<Self> {
@@ -24,7 +31,7 @@ impl LxdProcessClient {
             .ok_or_else(|| anyhow!("Couldn't find the `lxc` executable in your `PATH` - please try specifying exact location with `--lxc-path`"))
             .map_err(Error::Other)?;
 
-        Ok(Self::new(lxc))
+        Self::new(lxc)
     }
 
     fn execute(&mut self, callback: impl FnOnce(&mut Command)) -> Result<String> {

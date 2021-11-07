@@ -1,18 +1,18 @@
+mod cmds;
+mod config;
+
 use crate::config::Config;
 use anyhow::*;
-use clap::Clap;
+use clap::Parser;
 use colored::*;
 use lib_lxd::{LxdClient, LxdFakeClient, LxdProcessClient};
 use std::io::stdout;
 use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
 
-mod cmds;
-mod config;
-
 /// LXD snapshots, automated
-#[derive(Clap, Debug)]
-struct Args {
+#[derive(Parser)]
+pub struct Args {
     /// Runs application in a simulated safe-mode without applying any changes
     /// to the instances
     #[clap(short, long)]
@@ -31,8 +31,8 @@ struct Args {
     cmd: Command,
 }
 
-#[derive(Clap, Debug)]
-enum Command {
+#[derive(Parser)]
+pub enum Command {
     /// Creates a snapshot for each instance matching the policy
     Backup,
 
@@ -52,14 +52,14 @@ enum Command {
     Query(QueryCommand),
 }
 
-#[derive(Clap, Debug)]
-struct DebugCommand {
+#[derive(Parser)]
+pub struct DebugCommand {
     #[clap(subcommand)]
     cmd: DebugSubcommand,
 }
 
-#[derive(Clap, Debug)]
-enum DebugSubcommand {
+#[derive(Parser)]
+pub enum DebugSubcommand {
     /// Removes *ALL* snapshots (including the ones created manually) for each
     /// instance (i.e. container & virtual machine) matching the policy; if
     /// you suddenly created tons of unnecessary snapshots, this is the way to
@@ -67,36 +67,33 @@ enum DebugSubcommand {
     Nuke,
 }
 
-#[derive(Clap, Debug)]
-struct QueryCommand {
+#[derive(Parser)]
+pub struct QueryCommand {
     #[clap(subcommand)]
     cmd: QuerySubcommand,
 }
 
-#[derive(Clap, Debug)]
-enum QuerySubcommand {
+#[derive(Parser)]
+pub enum QuerySubcommand {
     /// Lists all the LXD instances together with policies associated with them
     Instances,
 }
 
 fn main() -> Result<()> {
     let args: Args = Args::parse();
+    let stdout = &mut stdout();
 
     if let Command::Validate = &args.cmd {
-        return cmds::validate(args);
+        return cmds::validate(stdout, args);
     }
 
-    let stdout = &mut stdout();
     let config = load_config(&args.config)?;
     let mut lxd = init_lxd(args.dry_run, args.lxc_path)?;
 
     match args.cmd {
         Command::Backup => cmds::backup(stdout, &config, lxd.deref_mut()),
-
         Command::BackupAndPrune => cmds::backup_and_prune(stdout, &config, lxd.deref_mut()),
-
         Command::Prune => cmds::prune(stdout, &config, lxd.deref_mut()),
-
         Command::Validate => unreachable!(),
 
         Command::Debug(DebugCommand {
@@ -117,8 +114,9 @@ fn init_lxd(dry_run: bool, lxc_path: Option<PathBuf>) -> Result<Box<dyn LxdClien
     let mut lxd = if let Some(lxc_path) = lxc_path {
         LxdProcessClient::new(lxc_path)
     } else {
-        LxdProcessClient::new_from_path().context("Couldn't initialize LXC client")?
-    };
+        LxdProcessClient::new_from_path()
+    }
+    .context("Couldn't initialize LXC client")?;
 
     if dry_run {
         println!(

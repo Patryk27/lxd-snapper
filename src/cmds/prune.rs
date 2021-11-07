@@ -1,17 +1,16 @@
+mod find_snapshots;
+mod find_snapshots_to_keep;
+mod summary;
+
+use self::{find_snapshots::*, find_snapshots_to_keep::*, summary::*};
 use crate::config::Policy;
 use crate::Config;
 use anyhow::Result;
 use lib_lxd::*;
 use std::io::Write;
 
-use self::{find_snapshots::*, find_snapshots_to_keep::*, summary::*};
-
-mod find_snapshots;
-mod find_snapshots_to_keep;
-mod summary;
-
-pub(crate) fn prune(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
-    PruneCmd {
+pub fn prune(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
+    Command {
         stdout,
         config,
         lxd,
@@ -19,17 +18,17 @@ pub(crate) fn prune(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdCl
     .run()
 }
 
-struct PruneCmd<'a> {
+struct Command<'a> {
     stdout: &'a mut dyn Write,
     config: &'a Config,
     lxd: &'a mut dyn LxdClient,
 }
 
-impl<'a> PruneCmd<'a> {
+impl<'a> Command<'a> {
     fn run(mut self) -> Result<()> {
         writeln!(self.stdout, "Pruning instances:")?;
 
-        let mut summary = PruneSummary::default();
+        let mut summary = Summary::default();
 
         for project in self.lxd.list_projects()? {
             for instance in self.lxd.list(&project.name)? {
@@ -42,7 +41,7 @@ impl<'a> PruneCmd<'a> {
 
     fn try_prune_instance(
         &mut self,
-        summary: &mut PruneSummary,
+        summary: &mut Summary,
         project: &LxdProject,
         instance: &LxdInstance,
     ) -> Result<()> {
@@ -85,7 +84,7 @@ impl<'a> PruneCmd<'a> {
         let mut deleted_snapshots = 0;
         let mut kept_snapshots = 0;
 
-        let snapshots = find_snapshots(&self.config, instance);
+        let snapshots = find_snapshots(self.config, instance);
         let snapshots_to_keep = find_snapshots_to_keep(policy, &snapshots);
 
         for snapshot in &snapshots {

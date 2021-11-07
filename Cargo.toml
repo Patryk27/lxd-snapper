@@ -2,8 +2,8 @@
 name = "lxd-snapper"
 version = "1.1.0"
 license = "MIT"
-authors = ["Patryk Wychowaniec <wychowaniec.patryk@gmail.com>"]
-edition = "2018"
+authors = ["Patryk Wychowaniec <pwychowaniec@pm.me>"]
+edition = "2021"
 
 [workspace]
 members = [
@@ -13,9 +13,9 @@ members = [
 [dependencies]
 anyhow = "1.0"
 chrono = "0.4"
-clap = "3.0.0-beta.2"
-colored = "1.8"
-indexmap = { version = "1.4", features = ["serde-1"] }
+clap = "3.0.0-beta.5"
+colored = "2.0"
+indexmap = { version = "1.7", features = ["serde-1"] }
 prettytable-rs = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
@@ -24,5 +24,5 @@ lib_lxd = { path = "libs/lxd" }
 
 [dev-dependencies]
 glob = "0.3"
-indoc = "0.3"
-pretty_assertions = "0.6"
+indoc = "1.0"
+pretty_assertions = "1.0"

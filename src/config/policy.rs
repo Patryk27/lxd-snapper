@@ -9,13 +9,10 @@ use std::hash::Hash;
 pub struct Policy {
     pub included_projects: Option<HashSet<LxdProjectName>>,
     pub excluded_projects: Option<HashSet<LxdProjectName>>,
-
     pub included_instances: Option<HashSet<LxdInstanceName>>,
     pub excluded_instances: Option<HashSet<LxdInstanceName>>,
-
     pub included_statuses: Option<HashSet<LxdInstanceStatus>>,
     pub excluded_statuses: Option<HashSet<LxdInstanceStatus>>,
-
     pub keep_hourly: Option<usize>,
     pub keep_daily: Option<usize>,
     pub keep_weekly: Option<usize>,
@@ -163,9 +160,9 @@ mod tests {
             fn applies_to_every_instance() {
                 let policy = Policy::default();
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), true);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
+                assert!(policy.applies_to(&project_a(), &instance_a()));
+                assert!(policy.applies_to(&project_a(), &instance_b()));
+                assert!(policy.applies_to(&project_b(), &instance_c()));
             }
         }
 
@@ -179,9 +176,9 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), true);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), false);
+                assert!(policy.applies_to(&project_a(), &instance_a()));
+                assert!(policy.applies_to(&project_a(), &instance_b()));
+                assert!(!policy.applies_to(&project_b(), &instance_c()));
             }
         }
 
@@ -195,9 +192,9 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), false);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
+                assert!(!policy.applies_to(&project_a(), &instance_a()));
+                assert!(!policy.applies_to(&project_a(), &instance_b()));
+                assert!(policy.applies_to(&project_b(), &instance_c()));
             }
         }
 
@@ -211,9 +208,9 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), false);
+                assert!(policy.applies_to(&project_a(), &instance_a()));
+                assert!(!policy.applies_to(&project_a(), &instance_b()));
+                assert!(!policy.applies_to(&project_b(), &instance_c()));
             }
         }
 
@@ -227,9 +224,9 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), false);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), true);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
+                assert!(!policy.applies_to(&project_a(), &instance_a()));
+                assert!(policy.applies_to(&project_a(), &instance_b()));
+                assert!(policy.applies_to(&project_b(), &instance_c()));
             }
         }
 
@@ -246,9 +243,9 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), false);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), true);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
+                assert!(!policy.applies_to(&project_a(), &instance_a()));
+                assert!(policy.applies_to(&project_a(), &instance_b()));
+                assert!(policy.applies_to(&project_b(), &instance_c()));
             }
         }
 
@@ -265,9 +262,9 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), false);
+                assert!(policy.applies_to(&project_a(), &instance_a()));
+                assert!(!policy.applies_to(&project_a(), &instance_b()));
+                assert!(!policy.applies_to(&project_b(), &instance_c()));
             }
         }
 
@@ -286,9 +283,9 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), false);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), true);
+                assert!(!policy.applies_to(&project_a(), &instance_a()));
+                assert!(!policy.applies_to(&project_a(), &instance_b()));
+                assert!(policy.applies_to(&project_b(), &instance_c()));
             }
         }
 
@@ -308,9 +305,9 @@ mod tests {
                     ..Default::default()
                 };
 
-                assert_eq!(policy.applies_to(&project_a(), &instance_a()), true);
-                assert_eq!(policy.applies_to(&project_a(), &instance_b()), false);
-                assert_eq!(policy.applies_to(&project_b(), &instance_c()), false);
+                assert!(policy.applies_to(&project_a(), &instance_a()));
+                assert!(!policy.applies_to(&project_a(), &instance_b()));
+                assert!(!policy.applies_to(&project_b(), &instance_c()));
             }
         }
     }
@@ -357,7 +354,7 @@ mod tests {
             };
 
             pa::assert_eq!(policy_a.clone().merge_with(policy_b), policy_ab);
-            pa::assert_eq!(policy_a.clone().merge_with(policy_c), policy_ac);
+            pa::assert_eq!(policy_a.merge_with(policy_c), policy_ac);
         }
     }
 }

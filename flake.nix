@@ -2,64 +2,67 @@
   description = "lxd-snapper: LXD snapshots, automated";
 
   inputs = {
-    gitignore = {
-      url = "github:hercules-ci/gitignore";
-      flake = false;
-    };
-
     naersk = {
       url = "github:nmattia/naersk";
-
-      inputs = {
-        nixpkgs = {
-          follows = "nixpkgs";
-        };
-      };
     };
 
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-20.09";
+      url = "github:nixos/nixpkgs";
     };
 
-    nixpkgs-mozilla = {
-      url = "github:mozilla/nixpkgs-mozilla";
-      flake = false;
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
     };
   };
 
-  outputs = { self, gitignore, naersk, nixpkgs, nixpkgs-mozilla }:
+  outputs = { self, naersk, nixpkgs, rust-overlay }:
     let
       build = { system, target, RUSTFLAGS }:
         let
-          pkgs = (import nixpkgs) {
+          pkgs = import nixpkgs {
             inherit system;
 
             overlays = [
-              (import "${nixpkgs-mozilla}")
+              rust-overlay.overlay
             ];
           };
 
-          rust = (pkgs.rustChannelOf {
-            rustToolchain = ./rust-toolchain;
-            sha256 = "sha256-KCh2UBGtdlBJ/4UOqZlxUtcyefv7MH1neoVNV4z0nWs=";
-          }).rust.override {
+          rust = (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain).override {
             targets = [ target ];
           };
 
-          gitignoreSource = (pkgs.callPackage gitignore { }).gitignoreSource;
-
-          buildPackage = (pkgs.callPackage naersk {
+          naersk' = pkgs.callPackage naersk {
+            cargo = rust;
             rustc = rust;
-          }).buildPackage;
+          };
+
+          # Generates a new derivation without the ./tests directory; allows to
+          # save a lot of time on incremental `nix flake check`-s, as otherwise
+          # any change to any end-to-end test would force lxd-snapper to be
+          # rebuilt from scratch.
+          src = pkgs.runCommand "src" { } ''
+            mkdir $out
+            ln -s "${./Cargo.lock}" $out/Cargo.lock
+            ln -s "${./Cargo.toml}" $out/Cargo.toml
+            ln -s "${./docs}" $out/docs
+            ln -s "${./libs}" $out/libs
+            ln -s "${./src}" $out/src
+          '';
 
         in
-        buildPackage {
-          inherit RUSTFLAGS;
+        naersk'.buildPackage {
+          inherit src RUSTFLAGS;
 
-          src = gitignoreSource ./.;
           doCheck = true;
-          cargoTestOptions = args: args ++ [ "--all" ];
+          cargoTestOptions = args: args ++ [ "--workspace" ];
           CARGO_BUILD_TARGET = target;
+        };
+
+      check = { system }:
+        import ./tests {
+          inherit nixpkgs;
+
+          lxd-snapper = self.defaultPackage."${system}";
         };
 
     in
@@ -75,6 +78,16 @@
           system = "x86_64-linux";
           target = "x86_64-unknown-linux-musl";
           RUSTFLAGS = "-C relocation-model=dynamic-no-pic";
+        };
+      };
+
+      checks = {
+        i686-linux = check {
+          system = "i686-linux";
+        };
+
+        x86_64-linux = check {
+          system = "x86_64-linux";
         };
       };
     };

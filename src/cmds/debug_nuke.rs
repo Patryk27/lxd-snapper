@@ -3,11 +3,7 @@ use anyhow::Result;
 use lib_lxd::*;
 use std::io::Write;
 
-pub(crate) fn debug_nuke(
-    stdout: &mut dyn Write,
-    config: &Config,
-    lxd: &mut dyn LxdClient,
-) -> Result<()> {
+pub fn debug_nuke(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
     writeln!(stdout, "Nuking instances:")?;
 
     for project in lxd.list_projects()? {

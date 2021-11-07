@@ -2,14 +2,14 @@ use anyhow::{bail, Result};
 use std::io::Write;
 
 #[derive(Default)]
-pub struct PruneSummary {
+pub struct Summary {
     pub processed_instances: usize,
     pub deleted_snapshots: usize,
     pub kept_snapshots: usize,
     pub errors: usize,
 }
 
-impl PruneSummary {
+impl Summary {
     pub fn print(self, stdout: &mut dyn Write) -> Result<()> {
         if self.errors != 0 {
             bail!("Some instances couldn't be pruned");

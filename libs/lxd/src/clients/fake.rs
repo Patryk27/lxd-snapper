@@ -71,8 +71,8 @@ impl LxdClient for LxdFakeClient {
         if let Some(project) = self.project_mut(project) {
             Ok(project.values().cloned().collect())
         } else {
-            // This is consistent with behavior of the `lxc` CLI, which also returns just an
-            // empty set for non-existing projects
+            // This is consistent with behavior of the `lxc` CLI, which also
+            // returns just an empty set for non-existing projects
             Ok(Default::default())
         }
     }

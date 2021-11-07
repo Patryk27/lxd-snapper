@@ -1,0 +1,3 @@
+policies:
+  _all:
+    keep-last: 1

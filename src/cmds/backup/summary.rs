@@ -2,13 +2,13 @@ use anyhow::{bail, Result};
 use std::io::Write;
 
 #[derive(Default)]
-pub struct BackupSummary {
+pub struct Summary {
     pub processed_instances: usize,
     pub created_snapshots: usize,
     pub errors: usize,
 }
 
-impl BackupSummary {
+impl Summary {
     pub fn print(self, stdout: &mut dyn Write) -> Result<()> {
         if self.errors != 0 {
             bail!("Some instances couldn't be backed-up");
