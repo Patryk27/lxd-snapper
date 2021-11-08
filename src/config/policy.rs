@@ -51,11 +51,6 @@ impl Policy {
         self.keep_limit
     }
 
-    /// Returns whether this policy applies to given project and instance.
-    ///
-    /// For instance: if this policy is restricted to match only instances with
-    /// specified names, it will return `true` only for instance matching
-    /// those names.
     pub fn applies_to(&self, project: &LxdProject, instance: &LxdInstance) -> bool {
         fn in_set<T: Hash + Eq>(items: &Option<HashSet<T>>, item: &T, default: bool) -> bool {
             items
@@ -79,8 +74,6 @@ impl Policy {
         project_included && name_included && status_included
     }
 
-    /// Merges this policy with another one, overwriting fields in a cascading
-    /// fashion.
     pub fn merge_with(self, other: Self) -> Self {
         Self {
             included_projects: None,
@@ -103,8 +96,8 @@ impl Policy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prelude::*;
     use lib_lxd::test_utils::*;
-    use pretty_assertions as pa;
 
     fn project_a() -> LxdProject {
         project("a")

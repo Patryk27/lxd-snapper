@@ -1,37 +1,45 @@
-use crate::config::Config;
-use anyhow::Result;
-use lib_lxd::*;
-use std::io::Write;
+use crate::prelude::*;
 
-pub fn debug_nuke(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
-    writeln!(stdout, "Nuking instances:")?;
+pub struct DebugNuke<'a, 'b> {
+    env: &'a mut Environment<'b>,
+}
 
-    for project in lxd.list_projects()? {
-        for instance in lxd.list(&project.name)? {
-            if config.policy(&project, &instance).is_none() {
-                continue;
-            }
-
-            writeln!(stdout)?;
-            writeln!(stdout, "- {}/{}", project.name, instance.name)?;
-
-            for snapshot in instance.snapshots {
-                writeln!(stdout, "-> deleting snapshot: {}", snapshot.name)?;
-                lxd.delete_snapshot(&project.name, &instance.name, &snapshot.name)?;
-            }
-        }
+impl<'a, 'b> DebugNuke<'a, 'b> {
+    pub fn new(env: &'a mut Environment<'b>) -> Self {
+        Self { env }
     }
 
-    Ok(())
+    pub fn run(self) -> Result<()> {
+        writeln!(self.env.stdout, "Nuking instances:")?;
+
+        for project in self.env.lxd.list_projects()? {
+            for instance in self.env.lxd.list(&project.name)? {
+                if !self.env.config.policies.matches(&project, &instance) {
+                    continue;
+                }
+
+                writeln!(self.env.stdout)?;
+                writeln!(self.env.stdout, "- {}/{}", project.name, instance.name)?;
+
+                for snapshot in instance.snapshots {
+                    writeln!(self.env.stdout, "-> deleting snapshot: {}", snapshot.name)?;
+
+                    self.env
+                        .lxd
+                        .delete_snapshot(&project.name, &instance.name, &snapshot.name)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::assert_out;
-    use indoc::indoc;
-    use lib_lxd::test_utils::*;
-    use pretty_assertions as pa;
+    use lib_lxd::{test_utils::*, *};
 
     fn instances() -> Vec<LxdInstance> {
         vec![
@@ -40,7 +48,6 @@ mod tests {
                 status: LxdInstanceStatus::Running,
                 snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             },
-            //
             LxdInstance {
                 name: instance_name("instance-b"),
                 status: LxdInstanceStatus::Running,
@@ -49,13 +56,11 @@ mod tests {
                     snapshot("snapshot-2", "2000-01-01 13:00:00"),
                 ],
             },
-            //
             LxdInstance {
                 name: instance_name("instance-c"),
                 status: LxdInstanceStatus::Stopping,
                 snapshots: Default::default(),
             },
-            //
             LxdInstance {
                 name: instance_name("instance-d"),
                 status: LxdInstanceStatus::Stopped,
@@ -73,7 +78,9 @@ mod tests {
             let config = Config::default();
             let mut lxd = LxdFakeClient::new(instances());
 
-            debug_nuke(&mut stdout, &config, &mut lxd).unwrap();
+            DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+                .run()
+                .unwrap();
 
             assert_out!(
                 r#"
@@ -92,7 +99,7 @@ mod tests {
     mod given_some_policy {
         use super::*;
 
-        const POLICY: &str = indoc!(
+        const CONFIG: &str = indoc!(
             r#"
             policies:
               main:
@@ -103,10 +110,12 @@ mod tests {
         #[test]
         fn deletes_snapshots_only_for_instances_matching_that_policy() {
             let mut stdout = Vec::new();
-            let config = Config::from_code(POLICY);
+            let config = Config::from_code(CONFIG);
             let mut lxd = LxdFakeClient::new(instances());
 
-            debug_nuke(&mut stdout, &config, &mut lxd).unwrap();
+            DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+                .run()
+                .unwrap();
 
             assert_out!(
                 r#"
@@ -129,19 +138,16 @@ mod tests {
                         status: LxdInstanceStatus::Running,
                         snapshots: Default::default(),
                     },
-                    //
                     LxdInstance {
                         name: instance_name("instance-b"),
                         status: LxdInstanceStatus::Running,
                         snapshots: Default::default(),
                     },
-                    //
                     LxdInstance {
                         name: instance_name("instance-c"),
                         status: LxdInstanceStatus::Stopping,
                         snapshots: Default::default(),
                     },
-                    //
                     LxdInstance {
                         name: instance_name("instance-d"),
                         status: LxdInstanceStatus::Stopped,

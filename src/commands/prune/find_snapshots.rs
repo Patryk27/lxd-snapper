@@ -1,11 +1,11 @@
-use crate::config::Config;
+use crate::prelude::*;
 use lib_lxd::*;
 
 pub fn find_snapshots(config: &Config, instances: &LxdInstance) -> Vec<LxdSnapshot> {
     let mut snapshots: Vec<_> = instances
         .snapshots
         .iter()
-        .filter(|snapshot| config.is_snapshot_name(&snapshot.name))
+        .filter(|snapshot| config.matches_snapshot_name(&snapshot.name))
         .cloned()
         .collect();
 
@@ -16,9 +16,7 @@ pub fn find_snapshots(config: &Config, instances: &LxdInstance) -> Vec<LxdSnapsh
 #[cfg(test)]
 mod tests {
     use super::*;
-    use indoc::indoc;
     use lib_lxd::test_utils::*;
-    use pretty_assertions as pa;
 
     const CONFIG: &str = indoc!(
         r#"

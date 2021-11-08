@@ -1,9 +1,6 @@
-use crate::config::Config;
+use crate::prelude::*;
 use crate::Args;
-use anyhow::Result;
-use colored::Colorize;
 use lib_lxd::LxdClient;
-use std::io::Write;
 use std::ops::DerefMut;
 
 pub fn validate(stdout: &mut dyn Write, args: Args) -> Result<()> {
@@ -28,7 +25,7 @@ fn load_config(stdout: &mut dyn Write, args: &Args) -> Result<Config> {
         args.config.display()
     )?;
 
-    let config = crate::load_config(&args.config)?;
+    let config = crate::init_config(args)?;
 
     writeln!(stdout, ".. [ OK ]")?;
 
@@ -38,7 +35,7 @@ fn load_config(stdout: &mut dyn Write, args: &Args) -> Result<Config> {
 fn init_lxd(stdout: &mut dyn Write, args: &Args) -> Result<Box<dyn LxdClient>> {
     writeln!(stdout, "Connecting to LXD")?;
 
-    let lxd = crate::init_lxd(false, args.lxc_path.clone())?;
+    let lxd = crate::init_lxd(args)?;
 
     writeln!(stdout, ".. [ OK ]")?;
 
@@ -52,7 +49,7 @@ fn validate_config(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdCli
 
     for project in lxd.list_projects()? {
         for instance in lxd.list(&project.name)? {
-            if config.policy(&project, &instance).is_some() {
+            if config.policies.matches(&project, &instance) {
                 matching_instances += 1;
             }
         }
@@ -134,7 +131,7 @@ mod tests {
 
         assert_out!(
             r#"
-            Loading configuration file: src/cmds/validate/tests/missing_lxc_path/config.yaml
+            Loading configuration file: src/commands/validate/tests/missing_lxc_path/config.yaml
             .. [ OK ]
 
             Connecting to LXD

@@ -1,4 +1,4 @@
-use crate::config::Policy;
+use crate::prelude::*;
 use indexmap::IndexSet;
 use lib_lxd::*;
 
@@ -63,7 +63,6 @@ pub fn find_snapshots_to_keep<'a>(
 mod tests {
     use super::*;
     use lib_lxd::test_utils::*;
-    use pretty_assertions as pa;
 
     fn test(policy: Policy, snapshots: Vec<LxdSnapshot>, expected: Vec<&str>) {
         let actual: Vec<_> = find_snapshots_to_keep(&policy, &snapshots)

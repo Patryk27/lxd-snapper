@@ -1,0 +1,12 @@
+hooks:
+  on-backup-started: 'echo "on-backup-started" >> /tmp/log.txt'
+  on-snapshot-created: 'echo "on-snapshot-created: {{projectName}}, {{instanceName}}, {{snapshotName}}" >> /tmp/log.txt'
+  on-backup-completed: 'echo "on-backup-completed" >> /tmp/log.txt'
+
+  on-prune-started: 'echo "on-prune-started" >> /tmp/log.txt'
+  on-snapshot-deleted: 'echo "on-snapshot-deleted: {{projectName}}, {{instanceName}}, {{snapshotName}}" >> /tmp/log.txt'
+  on-prune-completed: 'echo "on-prune-completed" >> /tmp/log.txt'
+
+policies:
+  _all:
+    keep-last: 0

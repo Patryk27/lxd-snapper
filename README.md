@@ -3,11 +3,10 @@
 **LXD snapshots, automated.**
 
 lxd-snapper is a tool that automates creating & removing LXD snapshots: just
-setup a snapshotting policy, add a systemd timer (or cron, or whatever
-scheduling mechanism you use) and enjoy your containers.
+prepare a snapshotting policy, setup a cronjob, and enjoy your containers.
 
 tl;dr it's a fancy wrapper for `lxc snapshot` & `lxc delete`; kinda like LXD's
-built-in `snapshots.schedule`, just more configurable.
+built-in `snapshots.schedule`, just more powerful.
 
 # Requirements
 
@@ -16,7 +15,7 @@ built-in `snapshots.schedule`, just more configurable.
 
 Plus, if you plan on compiling lxd-snapper locally:
 
-- Cargo & Rust 1.56
+- Cargo & Rust 1.56.1+
 - Nix (for running integration tests)
 
 # Getting started
@@ -25,7 +24,7 @@ Plus, if you plan on compiling lxd-snapper locally:
 
 You can either download pre-built binaries:
 
-```bash
+``` console
 # i686
 $ wget https://github.com/Patryk27/lxd-snapper/releases/download/v1.1/lxd-snapper-linux32 -O lxd-snapper
 $ chmod u+x lxd-snapper
@@ -37,7 +36,7 @@ $ chmod u+x lxd-snapper
 
 ... or build lxd-snapper on your own:
 
-```bash
+``` console
 $ git clone https://github.com/Patryk27/lxd-snapper
 $ cd lxd-snapper
 
@@ -56,330 +55,507 @@ $ ./result/bin/lxd-snapper
 
 ## Configuring
 
-lxd-snapper requires a single configuration file that defines **policies**; each
-policy describes which LXD instances (so _containers_ and _virtual machines_) it
-matches and defines retention strategy for snapshots of those instances.
+Setting-up lxd-snapper is pretty easy: you just have to prepare a single
+configuration file that will describe which LXD instances (so containers and/or
+virtual machines) you want to get snapshotted, and for how long those snapshots
+should be kept around.
 
-To keep it compact, let's start with a minimal configuration:
+We can start with the most basic configuration:
 
-```yaml
+``` yaml
 policies:
   my-first-policy:
-    keep-last: 5
-```
-
-By default, each policy applies to all of the instances (inside all of the
-projects, if you use [LXD projects](https://ubuntu.com/tutorials/introduction-to-lxd-projects#1-overview)),
-and so what that policy would do is that it'd tell lxd-snapper that for each
-instance you'd like to keep five of _its_ latest snapshots around.
-
-(e.g. if you performed snapshotting once an hour, that would keep around
-snapshots from the latest five hours; once a day, latest five days.)
-
-If you have some containers around, you can go ahead and try it locally by
-saving that configuration into `config.yaml` and running
-`lxd-snapper -c config.yaml --dry-run backup` - thanks to the `--dry-run`
-switch, no changes will be actually applied, you'll just see what would happen.
-
----
-
-Policies can be applied to a **subset of all the instances**:
-
-```yaml
-policies:
-  databases:
-    included-instances: ['mysql']
-    keep-last: 8
-
-  files:
-    included-instances: ['nginx', 'php']
-    keep-last: 1
-```
-
-This configuration defines two policies:
-
-- the first one applies to an instance named `mysql`, and it tells lxd-snapper
-that it should keep only its eight latest snapshots around,
-- the second one applies to instances named `nginx` and `php`, and it tells
-lxd-snapper that it should keep only its latest snapshot around.
-
-_(there's also `excluded-instances`, which works symmetrically.)_
-
-----
-
-Policies can be applied to a **subset of all the projects**:
-
-```yaml
-policies:
-  important-clients:
-    included-projects: ['client-a', 'client-b']
-    keep-last: 32
-
-  unimportant-clients:
-    included-projects: ['client-c']
     keep-last: 2
 ```
 
-This configuration defines two policies:
+This beautiful YAML file defines a single policy called `my-first-policy` that
+will snapshot all of your instances, keeping around the latest two snapshots per
+each instance.
 
-- the first one applies to all of the instances inside the `client-a` and
-`client-b` projects, and it tells lxd-snapper to keep the latest 32 snapshots
-per instance there,
-- the second one applies to all of the instances inside the `client-c` project,
-and it tells lxd-snapper to keep the latest 2 snapshots there.
+To make it less abstract, let's go ahead and create some containers:
 
-_(there's also `excluded-projects`, which works symmetrically.)_
+``` console
+$ lxc launch ubuntu: hello
+$ lxc launch ubuntu: world
+# (the container's OS doesn't matter - Ubuntu is just an example)
 
-----
-
-Apart from `keep-last`, there are many other `keep-` strategies you can use:
-
-```yaml
-policies:
-  all-instances:
-    keep-daily: 15
-    keep-weekly: 10
-    keep-monthly: 5
-    keep-yearly: 4
+$ lxc ls
++-------+---------+------+------+-----------+-----------+
+| NAME  |  STATE  | IPV4 | IPV6 |   TYPE    | SNAPSHOTS |
++-------+---------+------+------+-----------+-----------+
+| hello | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
+| world | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
 ```
 
-If you're familiar with Borg (especially the [`borg prune`](https://borgbackup.readthedocs.io/en/stable/usage/prune.html)
-command), those names shouldn't come as a surprise - lxd-snapper implements the
-same retention algorithm as Borg does.
+Now, to snapshot those containers, first you'd have to store that configuration
+from before into a file - say, `config.yaml` - and then run `lxd-snapper
+backup`:
 
-On the other hand, if those names _do_ seem scary, don't worry - what they
-describe is that all instances will be kept 15 snapshots for the recent days,
-10 snapshots for the recent weeks, 5 snapshots for the recent months, and 4
-snapshots for the recent years.
-
-In total, this counts for 15 + 10 + 5 + 4 = **34** snapshots _per instance_,
-with the newest snapshot being the one from today, and the oldest - the one from
-four~five years.
-
-Though this algorithm might be a bit hard to grasp, it's amazingly versatile and
-allows for lots of different combinations; I encourage you to try going through
-the example configs inside `docs/example-configs` to see more examples with some
-in-depth commentary about them.
-
-----
-
-As the last feature, policies are **cascading**:
-
-```yaml
-policies:
-  important-clients:
-    included-projects: ['client-a', 'client-b']
-    keep-hourly: 6
-    keep-daily: 5
-    keep-monthly: 2
-    keep-yearly: 1
-
-  unimportant-clients:
-    included-projects: ['client-c']
-    keep-hourly: 6
-    keep-daily: 2
-    keep-monthly: 1
-
-  databases:
-    included-instances: ['mysql', 'mongodb']
-    keep-hourly: 12
-```
-
-Let's say that we have a `mysql` instance inside the `client-c` project - it
-matches two of our policies: `unimportant-clients` and `databases`. The way
-lxd-snapper evaluates strategy for that particular instance is that it takes
-properties from both `unimportant-clients` and `databases`, and squashes them
-together, overwriting duplicated fields.
-
-In this case we'd end up with an equivalent of:
-
-```yaml
-keep-hourly: 12 # taken from `databases`
-keep-daily: 2   # taken from `unimportant-clients`
-keep-monthly: 1 # taken from `unimportant-clients`
-```
-
-Policies are always evaluated top-bottom, so that the policy that's "below" will
-overwrite properties of policy "above" it, in case an instance matches many of
-them.
-
-This is quite a useful feature, because it allows you to extract common rules to 
-the top of the configuration file; for instance, on my server I'm running a
-configuration similar to:
-
-```yaml
-config:
-  _all:
-    keep-hourly: 6
-    keep-daily: 5
-    keep-monthly: 4
-    keep-yearly: 1
-
-  _non_essential:
-    included-instances: ['gitlab-runner']
-    keep-limit: 4
-
-  grafana:
-    included-instances: ['grafana', 'grafana-influx']
-    keep-hourly: 12
-```
-
-Thanks to the cascading, I'm able to provide special rules for "non essential"
-instances like `gitlab-runner`, which I just wouldn't like to be backed-up as
-much as other instances.
-
-## Usage
-
-Assuming you've prepared a proof-of-concept of your configuration and saved
-into `config.yaml`, first you can do:
-
-```
-./lxd-snapper query instances
-```
-
-This command will list all of the instances and show you which policies match
-them:
-
-```
-+---------+----------+---------------------------+
-| Project | Instance | Policies                  |
-+=========+==========+===========================+
-| default | nginx    | NONE                      |
-| default | mongodb  | databases + non-essential |
-| default | mysql    | databases                 |
-+---------+----------+---------------------------+
-```
-
-_(`+` means that many policies match given instance and cascading will apply.)_
-
-If all policies are matched correctly (watch for typos!), you can do:
-
-```shell
-$ ./lxd-snapper --dry-run backup
-```
-
-This command will perform a "dry run" of the `backup` command, meaning that
-you'll see what _would_ happen without actually applying any changes to any of
-the instances:
-
-```
+``` console
+$ lxd-snapper --dry-run -c config.yaml backup
 note: --dry-run is active, no changes will be applied
 
 Backing-up instances:
 
-- default/mongodb
--> creating snapshot: auto-20200722-165621
+- default/hello
+-> creating snapshot: auto-20180101-120000
 -> [ OK ]
 
-- default/mysql
--> creating snapshot: auto-20200722-165621
+- default/world
+-> creating snapshot: auto-20180101-120000
 -> [ OK ]
 
 Summary
-- processed instances: 3
+- processed instances: 2
 - created snapshots: 2
 ```
 
-_(all commands support the `--dry-run` switch - you can use it any time to
-preview what would happen if you run a particular command.)_
+As you can see, there's a detailed output of everything that's happened - or
+rather of everything that _would_ happen: we used a magic switch called
+`--dry-run` which tells lxd-snapper that you only want to **preview** the
+changes without actually creating or removing any snapshots.
 
-If everything looks good, you can perform the actual backup:
+We can confirm that nothing's changed by re-running `lxc ls` and seeing that
+there are still zero snapshots there:
 
-```shell
-$ ./lxd-snapper backup
+``` console
+$ lxc ls
++-------+---------+------+------+-----------+-----------+
+| NAME  |  STATE  | IPV4 | IPV6 |   TYPE    | SNAPSHOTS |
++-------+---------+------+------+-----------+-----------+
+| hello | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
+| world | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
 ```
 
-This command will run `lxc snapshot` for each instance that matches at least one
-policy; continuing the example from above, it would be similar to invoking
-`lxc snapshot mysql` and `lxc snapshot mongodb`.
+`--dry-run` is useful after you make some changes to the configuration and want
+to confirm that everything is working as intended - since that's the case with
+us, we can now re-run `lxc-snapper backup` without `--dry-run`:
 
-Containers that don't match any policy (like the `nginx` instance above) won't
-be touched.
+``` console
+$ lxd-snapper -c config.yaml backup
 
-**`backup` never removes any snapshots** - in order to remove old snapshots, you
-have to run `prune`:
+/* ... */
 
-```shell
-$ ./lxd-snapper --dry-run prune
+Summary
+- processed instances: 2
+- created snapshots: 2
+```
 
-note: --dry-run is active, no changes will be applied
+... and voilà:
 
+``` console
+$ lxc ls
++-------+---------+------+------+-----------+-----------+
+| NAME  |  STATE  | IPV4 | IPV6 |   TYPE    | SNAPSHOTS |
++-------+---------+------+------+-----------+-----------+
+| hello | RUNNING | ...  | ...  | CONTAINER | 1         |
++-------+---------+------+------+-----------+-----------+
+| world | RUNNING | ...  | ...  | CONTAINER | 1         |
++-------+---------+------+------+-----------+-----------+
+```
+
+Our policy says `keep-last: 2`, so let's go ahead and run `lxd-snapper backup`
+twice more, to trigger this limit:
+
+``` console
+$ lxd-snapper -c config.yaml backup
+$ lxd-snapper -c config.yaml backup
+
+$ lxc ls
++-------+---------+------+------+-----------+-----------+
+| NAME  |  STATE  | IPV4 | IPV6 |   TYPE    | SNAPSHOTS |
++-------+---------+------+------+-----------+-----------+
+| hello | RUNNING | ...  | ...  | CONTAINER | 3         |
++-------+---------+------+------+-----------+-----------+
+| world | RUNNING | ...  | ...  | CONTAINER | 3         |
++-------+---------+------+------+-----------+-----------+
+```
+
+Now we've got three snapshots per each container - why not two? Because as a
+safety measure, the `backup` command always only _creates_ snapshots - never
+deletes them.
+
+To remove stale snapshots, you have to run `prune`:
+
+``` console
+$ lxd-snapper --dry-run -c config.yaml prune
 Pruning instances:
 
-- default/mongodb
--> keeping snapshot: auto-20200722-165621
+- default/hello
+-> keeping snapshot: auto-20180101-120200
+-> keeping snapshot: auto-20180101-120100
+-> deleting snapshot: auto-20180101-120000
 -> [ OK ]
 
-- default/mysql
--> keeping snapshot: auto-20200722-165621
+- default/world
+-> keeping snapshot: auto-20180101-120200
+-> keeping snapshot: auto-20180101-120100
+-> deleting snapshot: auto-20180101-120000
 -> [ OK ]
 
 Summary
-- processed instances: 3
+- processed instances: 2
+- deleted snapshots: 2
+- kept snapshots: 4
+```
+
+As before, we've started with `--dry-run` as to see if everything looks
+alright - and since it seems so, it's time to kick those stale snapshots out of
+our filesystem for good:
+
+``` console
+$ lxd-snapper -c config.yaml prune
+/* ... */
+Summary
+- processed instances: 2
+- deleted snapshots: 2
+- kept snapshots: 4
+
+$ lxc ls
++-------+---------+------+------+-----------+-----------+
+| NAME  |  STATE  | IPV4 | IPV6 |   TYPE    | SNAPSHOTS |
++-------+---------+------+------+-----------+-----------+
+| hello | RUNNING | ...  | ...  | CONTAINER | 2         |
++-------+---------+------+------+-----------+-----------+
+| world | RUNNING | ...  | ...  | CONTAINER | 2         |
++-------+---------+------+------+-----------+-----------+
+```
+
+Re-running `prune` will now do nothing, since all of the containers have
+correct number of snapshots:
+
+``` console
+$ lxd-snapper -c config.yaml prune
+Pruning instances:
+
+- default/hello
+-> keeping snapshot: auto-20180101-120200
+-> keeping snapshot: auto-20180101-120100
+-> [ OK ]
+
+- default/world
+-> keeping snapshot: auto-20180101-120200
+-> keeping snapshot: auto-20180101-120100
+-> [ OK ]
+
+Summary
+- processed instances: 2
 - deleted snapshots: 0
-- kept snapshots: 2
+- kept snapshots: 4
 ```
 
-Once again, if everything seems fine, you can perform the actual pruning:
+_(there's also a command called `backup-and-prune` that does backup and prune
+one after another - might come handy!)_
 
-```shell
-$ ./lxd-snapper prune
+And that's basically it - that's how lxd-snapper works; now let's see what makes
+it unique!
+
+## Including and excluding instances
+
+By default, each policy matches all instances across all [projects](https://ubuntu.com/tutorials/introduction-to-lxd-projects#1-overview) -
+to affect that, you can use the `included-*` / `excluded-*` options:
+
+``` yaml
+policies:
+  # Matches all instances inside the `client-a` project.
+  a:
+    included-projects: ['client-a']
+    
+  # Matches all instances _not_ inside the `client-`a project.
+  b:
+    excluded-projects: ['client-a']
+    
+  # Matches all instances named `container-a` across all projects.
+  c:
+    included-instances: ['container-a']
+    
+  # Matches all instances _not_ named `container-a` across all projects.
+  d:
+    excluded-instances: ['container-a']
+    
+  # Matches all instances that are running at the time of performing `backup` /
+  # `prune`.
+  #
+  # Possible values: Aborting, Running, Starting, Stopped, and Stopping.
+  e:
+    included-statuses: ['Running']
+    
+  # Matches all instances that are _not_ running at the time of performing
+  # `backup` / `prune`.
+  f:
+    excluded-statuses: ['Running']
+    
+  # Matches all instances named `php` or `nginx` that belong to project
+  # `client-a` or `client-b`.
+  #
+  # For an instance to match this policy, it has to match all `included-*`
+  # rules, so e.g.:
+  #
+  # - an instance named `php` for `client-c` will be skipped, since `client-c`
+  #   doesn't match `included-projects`,
+  #
+  # - an instance named `nextcloud` for `client-a` will be skipped, since
+  #   `nextcloud` doesn't match `included-instances`.
+  #
+  # In SQL, this would be:
+  #
+  # SELECT *
+  #   FROM instances
+  #  WHERE (project = "client-a" OR project = "client-b")
+  #    AND (name = "php" OR name = "nginx")
+  #    AND (status = "Running")
+  g:
+    included-projects: ['client-a', 'client-b']
+    included-instances: ['php', 'nginx']
+    included-statuses: ['Running']
+ 
+  # Similarly as above (notice the reversed operator for `excluded-*`):
+  #
+  # SELECT *
+  #   FROM instances
+  #  WHERE (project = "client-a" OR project = "client-b")
+  #    AND (name != "php" AND name != "nginx")
+  h:
+    included-projects: ['client-a', 'client-b']
+    excluded-instances: ['php', 'nginx']
 ```
 
-This command will iterate through all the instances and remove their stale
-snapshots (i.e. the ones that are over the `keep-` limits) using the
-`lxc delete` command.
+## Retention strategies
 
-Only snapshots matching the `snapshot-name-prefix` setting will be accounted
-for - so, by default, only those snapshots whose names begin with `auto-` are
-counted towards the limits and are candidates for removal; lxd-snapper won't
-automatically remove other (e.g. hand-made) snapshots (unless they match
-`snapshot-name-prefix`, too).
+`keep-*` options determine for how long the snapshots should remain alive, so
+we'd say that they define snapshots' **retention strategies**.
 
-Usually, to keep snapshots on-time & tidy, you'll want run `backup` and `prune`
-together, like so:
+`keep-last` is the most straightforward setting, but it's not the only one -
+lxd-snapper implements [Borg's approach](https://borgbackup.readthedocs.io/en/stable/usage/prune.html),
+so one can get fancy:
 
-```shell
-$ ./lxd-snapper backup-and-prune
+``` yaml
+policies:
+  my-first-policy:
+    keep-hourly: 6
+    keep-daily: 5
+    keep-weekly: 4
+    keep-monthly: 3
+    keep-yearly: 2
+```
+
+This would keep snapshots from 6 latest hours + 5 latest days + 4 latest weeks +
+3 latest months + 2 latest years = 20 snapshots per instance.
+
+Or, rephrasing:
+
+- we'd have a snapshot per each past hour, up to 6 of them (e.g. 15:00, 14:00,
+  13:00, 12:00, 11:00 & 10:00),
+- we'd have a snapshot per each past day, up to 5 of them (e.g. today,
+  yesterday, the day before yesterday, 3 days ago & 4 days ago),
+- we'd have a snapshot per each past week, up to 4 of them (e.g. this week, the
+  past week, two weeks ago & three weeks ago),
+- et cetera, et cetera.
+
+This system takes a while to get used to, but it's also extremely versatile;
+you can find more examples inside the `docs/example-configs` directory and
+inside [Borg's documentation](https://borgbackup.readthedocs.io/en/stable/usage/prune.html#examples).
+
+Of course, this is all plug-and-play: if anything, `keep-last` should be enough
+for typical use cases.
+
+## Cascading
+
+Say, you're using [LXD projects](https://ubuntu.com/tutorials/introduction-to-lxd-projects#1-overview)
+and you've got a few containers:
+
+``` console
+$ lxc ls --project client-a
++-------+---------+------+------+-----------+-----------+
+| NAME  |  STATE  | IPV4 | IPV6 |   TYPE    | SNAPSHOTS |
++-------+---------+------+------+-----------+-----------+
+| mysql | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
+| php   | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
+
+$ lxc ls --project client-b
++-------+---------+------+------+-----------+-----------+
+| NAME  |  STATE  | IPV4 | IPV6 |   TYPE    | SNAPSHOTS |
++-------+---------+------+------+-----------+-----------+
+| mysql | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
+| php   | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
+
+$ lxc ls --project client-c
++-------+---------+------+------+-----------+-----------+
+| NAME  |  STATE  | IPV4 | IPV6 |   TYPE    | SNAPSHOTS |
++-------+---------+------+------+-----------+-----------+
+| mysql | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
+| php   | RUNNING | ...  | ...  | CONTAINER | 0         |
++-------+---------+------+------+-----------+-----------+
+```
+
+And, for the sake of argument, let's say that you want to create the following
+configuration:
+
+- all `mysql`-s should have 5 latest snapshots,
+- all `php`-s should have 2 latest snapshots,
+- except for `client-c`, which is important and should get 10 snapshots.
+
+That's what cascading is for - when multiple policies match a single container:
+
+``` yaml
+policies:
+  # Matches: client-a/mysql, client-b/mysql, client-c/mysql
+  all-mysqls:
+    included-instances: ['mysql']
+    keep-last: 5
+    
+  # Matches: client-a/php, client-b/php, client-c/php
+  all-phps:
+    included-instances: ['php']
+    keep-last: 2
+    
+  # Matches: client-c/mysql, client-c/php
+  important-clients:
+    included-projects: ['client-c']
+    keep-last: 10
+```
+
+... lxd-snapper will combine them top-bottom into a single policy.
+
+What this means practically is that when a few policies match a single
+instance, policies that are below will have _higher priority_ than the ones
+above them: `important-clients` is below `all-mysqls` and `all-phps`, so its
+`keep-last` is more important for `client-c/mysql` and `client-c/php`.
+
+This merging happens on a per-retention-strategy basis, so if we had:
+
+``` yaml
+policies:
+  # Matches: client-a/mysql, client-b/mysql, client-c/mysql
+  all-mysqls:
+    included-instances: ['mysql']
+    keep-daily: 2
+    
+  # Matches: client-a/php, client-b/php, client-c/php
+  all-phps:
+    included-instances: ['php']
+    keep-hourly: 8
+    
+  # Matches: client-c/mysql, client-c/php
+  important-clients:
+    included-projects: ['client-c']
+    keep-last: 20
+```
+
+... then our effective configuration would be:
+
+``` 
+client-a/mysql + client-b/mysql
+  keep-daily = 2
+  
+client-a/php + client-b/php
+  keep-hourly = 8
+
+client-c/mysql
+  keep-daily = 2
+  keep-last = 20
+  (= 22 snapshots)
+
+client-c/php
+  keep-hourly = 8
+  keep-last = 20
+  (= 28 snapshots)
+```
+
+Other possible use cases for this feature include creating a global "catch all"
+policy, and then creating exceptions of it:
+
+``` yaml
+policies:
+  all:
+    keep-last: 10
+    
+  storages:
+    include-containers: ['nextcloud', 'minio']
+    keep-last: 20
+```
+
+This would keep 10 snapshots for all of the containers, with the exception of
+`nextcloud` and `minio` that would have 20 snapshots.
+
+## Hooks
+
+Inside the configuration file, next to `policies:`, you can have a section
+called `hooks` - they are small commands executed when a certain event inside
+lxd-snapper happens:
+
+``` yaml
+hooks:
+  on-backup-started: 'echo "on-backup-started" >> /tmp/log.txt'
+  on-snapshot-created: 'echo "on-snapshot-created: {{projectName}}, {{instanceName}}, {{snapshotName}}" >> /tmp/log.txt'
+  on-backup-completed: 'echo "on-backup-completed" >> /tmp/log.txt'
+
+  on-prune-started: 'echo "on-prune-started" >> /tmp/log.txt'
+  on-snapshot-deleted: 'echo "on-snapshot-deleted: {{projectName}}, {{instanceName}}, {{snapshotName}}" >> /tmp/log.txt'
+  on-prune-completed: 'echo "on-prune-completed" >> /tmp/log.txt'
+
+policies:
+  # ...
+```
+
+Typical use cases include e.g. synchronizing snapshots to external storage:
+
+``` yaml
+hooks:
+  on-snapshot-created: 'zfs send ... | ssh zfs recv ...'
+  on-snapshot-deleted: 'zfs send ... | ssh zfs recv ...'
+
+policies:
+  # ...
+```
+
+As for the syntax, `{{something}}` is used for variable substitution -
+lxd-snapper will replace e.g. `{{instanceName}}` with the snapshot's instance
+name. There are three variables - `{{projectName}}`, `{{instanceName}}` and
+`{{snapshotName}}` - and they are available only for the `on-snapshot-*` hooks.
+
+You can provide at most one script per hook (i.e. you can't have
+`on-backup-started` defined twice).
+
+Hooks are run only from inside lxd-snapper (i.e. `on-snapshot-created` will not
+be triggered for a manual `lxc snapshot` from the command line), and they are
+skipped during `--dry-run`.
+
+Hooks are run as soon as the event happens and block lxd-snapper until the hook
+completes - e.g.:
+
+``` yaml
+hooks:
+  on-snapshot-created: 'delay 10'
+```
+
+... will delay creating _each_ snapshot by 10 seconds; if that's problematic for
+your use case, you might want to buffer the changes like so:
+
+``` yaml
+hooks:
+  on-backup-started: 'rm /tmp/created-snapshots.txt'
+  on-snapshot-created: 'echo "{{instanceName}},{{snapshotName}}" >> /tmp/created-snapshots.txt'
+  on-backup-completed: './sync-snapshots.sh /tmp/created-snapshots.txt'
 ```
 
 ## Scheduling
 
-lxd-snapper is a fire-and-forget application - it doesn't daemonize itself; to
-keep instances backed-up & pruned on time, you'll most likely want to create a
-systemctl timer or a cron job for it:
+Finally, lxd-snapper is a fire-and-forget application - it doesn't daemonize
+itself; to keep instances backed-up & pruned on time, you'll most likely want to
+create a systemctl timer or a cronjob for it:
 
 ```
 5 * * * * /usr/bin/lxd-snapper -c /etc/lxd-snapper.yaml backup-and-prune
-```
-
-# Synopsis
-
-```
-lxd-snapper
-LXD snapshots, automated
-
-USAGE:
-    lxd-snapper [FLAGS] [OPTIONS] <SUBCOMMAND>
-
-FLAGS:
-    -d, --dry-run    Runs application in a simulated safe-mode without applying any changes to the instances
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
-OPTIONS:
-    -c, --config <config>        Path to the configuration file [default: config.yaml]
-    -l, --lxc-path <lxc-path>    Path to the `lxc` executable; usually inferred automatically from the `PATH`
-                                 environmental variable
-
-SUBCOMMANDS:
-    backup              Creates a snapshot for each instance matching the policy
-    backup-and-prune    Shorthand for `backup` followed by `prune`
-    debug               Various debug-oriented commands
-    help                Prints this message or the help of the given subcommand(s)
-    prune               Removes stale snapshots for each instance matching the policy
-    query               Various query-oriented commands
-    validate            Validates policy's syntax
 ```
 
 # Configuration syntax
@@ -387,50 +563,22 @@ SUBCOMMANDS:
 ```yaml
 snapshot-name-prefix: 'auto-'
 
+hooks:
+  on-backup-started: '...'
+  on-snapshot-created: '...'
+  on-backup-completed: '...'
+  on-prune-started: '...'
+  on-snapshot-deleted: '...'
+  on-prune-completed: '...'
+
 policies:
-  policy:
-    # When set, this policy will apply only to these
-    # specific projects.
-    #
-    # By default each policy applies to all projects.
-    included-projects: ['project-a', 'project-b']
-
-    # Symmetric to `included-projects`; when set, policy
-    # will apply to all projects _except_ these specific
-    # ones.
-    excluded-projects: ['project-c', 'project-d']
-
-    # When set, this policy will apply only to these
-    # specific instances (containers & virtual machines).
-    #
-    # By default each policy applies to all instances.
-    included-instances: ['container-a', 'virtual-machine-b']
-
-    # Symmetric to `included-instances`; when set, policy
-    # will apply to all instances _except_ these specific
-    # ones.
-    excluded-instances: ['container-c', 'virtual-machine-d']
-
-    # When set, this policy will apply only to instances
-    # with given status.
-    #
-    # Possible values: Aborting, Running, Starting,
-    # Stopped, and Stopping.
-    #
-    # By default each policy applies to all statuses.
-    included-statuses: ['Running']
-
-    # Symmetric to `included-statuses`; when set, policy
-    # will apply to all statuses _except_ these specific
-    # ones.
-    excluded-statuses: ['Stopped']
-
-    # All the `keep-` properties below determine retention
-    # policy. The mechanism is a rip off of Borg, so:
-    # https://borgbackup.readthedocs.io/en/stable/usage/prune.html
-    #
-    # You'll find examples inside `docs/example-configs`
-    # useful too.
+  policy-name:
+    included-projects: ['...', '...']
+    excluded-projects: ['...', '...']
+    included-instances: ['...', '...']
+    excluded-instances: ['...', '...']
+    included-statuses: ['...', '...']
+    excluded-statuses: ['...', '...']
 
     keep-hourly: 1
     keep-daily: 1
@@ -446,9 +594,10 @@ policies:
 Merge requests are very much welcome! :-)
 
 lxd-snapper is a pretty standard Rust project, so cargo & rustc should be enough
-to get you going; there are also a few end-to-end tests written using
-[NixOS Testing Framework](https://nix.dev/tutorials/integration-testing-using-virtual-machines)
-that you can run with `nix flake check` (requires <https://nixos.wiki/wiki/Flakes>).
+to get you going; there are also end-to-end tests written using [NixOS Testing
+Framework](https://nix.dev/tutorials/integration-testing-using-virtual-machines)
+that you can run with `nix flake check` (requires
+<https://nixos.wiki/wiki/Flakes>).
 
 # Disclaimer
 

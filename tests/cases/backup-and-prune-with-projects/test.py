@@ -1,11 +1,4 @@
-# ====
-#
-# This script is part of lxd-snapper's integration tests - running it standalone
-# will not work; please consult `../../../README.md` for details.
-#
-# =====
-
-with subtest("Fixture: Create some instances and snapshots for client-a"):
+with subtest("Create some instances and snapshots for client-a"):
     machine.succeed(
         "lxc project create client-a -c features.images=false -c features.profiles=false"
     )
@@ -27,7 +20,7 @@ with subtest("Fixture: Create some instances and snapshots for client-a"):
     assert_snapshot_exists("client-a", "php", "snap0")
     assert_snapshot_count("client-a", "php", ".*", 1)
 
-with subtest("Fixture: Create some instances for client-b"):
+with subtest("Create some instances for client-b"):
     machine.succeed(
         "lxc project create client-b -c features.images=false -c features.profiles=false"
     )
@@ -43,7 +36,7 @@ with subtest("Fixture: Create some instances for client-b"):
     machine.succeed("lxc launch alpine php")
     assert_snapshot_count("client-b", "php", ".*", 0)
 
-with subtest("Fixture: Create some instances for client-c"):
+with subtest("Create some instances for client-c"):
     machine.succeed(
         "lxc project create client-c -c features.images=false -c features.profiles=false"
     )
@@ -61,7 +54,7 @@ with subtest("Fixture: Create some instances for client-c"):
 
 machine.succeed("lxc project switch default")
 
-with subtest("Test: Backup"):
+with subtest("Backup"):
     for (date, snapshot_regex) in [
         ("2012-07-30 12:00:00", "auto\-20120730\-1200\d{2}"),
         ("2012-07-31 12:00:00", "auto\-20120731\-1200\d{2}"),
@@ -74,7 +67,7 @@ with subtest("Test: Backup"):
     ]:
         machine.succeed(f"date -s '{date}'")
 
-        out = run_lxd_snapper("backup")
+        out = run("backup")
 
         assert (
             "created snapshots: 4" in out
@@ -90,8 +83,8 @@ with subtest("Test: Backup"):
             assert_snapshot_does_not_exist(project, "mysql", snapshot_regex)
             assert_snapshot_does_not_exist(project, "php", snapshot_regex)
 
-with subtest("Test: Prune"):
-    out = run_lxd_snapper("prune")
+with subtest("Prune"):
+    out = run("prune")
 
     assert (
         "processed instances: 9" in out

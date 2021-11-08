@@ -8,14 +8,13 @@ let
 
   # During the tests we don't have access to the internet, so we have to use
   # pre-downloaded container images
-  lxd-alpine-meta = "${./lxd-alpine-meta.tar.xz}";
-  lxd-alpine-rootfs = "${./lxd-alpine-rootfs.tar.xz}";
-  lxd-config = "${./lxd-config.yaml}";
+  lxd-alpine-meta = "${./fixtures/lxd-alpine-meta.tar.xz}";
+  lxd-alpine-rootfs = "${./fixtures/lxd-alpine-rootfs.tar.xz}";
+  lxd-config = "${./fixtures/lxd-config.yaml}";
 
-  case = name:
+  mkTest = name:
     let
       test = ./cases + "/${name}/test.py";
-      lxd-snapper-config = "${./cases/${name}/config.yaml}";
 
       testScript' =
         (builtins.readFile ./cases/common.py) + "\n\n" + (builtins.readFile test);
@@ -27,20 +26,20 @@ let
             "@lxd-alpine-rootfs@"
             "@lxd-config@"
             "@lxd-snapper@"
-            "@lxd-snapper-config@"
+            "@dir@"
           ]
           [
             lxd-alpine-meta
             lxd-alpine-rootfs
             lxd-config
             "${lxd-snapper}/bin/lxd-snapper"
-            lxd-snapper-config
+            "${./cases}/${name}"
           ]
           testScript';
 
     in
     pkgs.nixosTest ({
-      inherit testScript;
+      inherit name testScript;
 
       machine = { ... }: {
         boot = {
@@ -74,6 +73,8 @@ let
     });
 in
 {
-  backup-prune = case "backup-prune";
-  dry-run = case "dry-run";
+  backup-and-prune = mkTest "backup-and-prune";
+  backup-and-prune-with-projects = mkTest "backup-and-prune-with-projects";
+  dry-run = mkTest "dry-run";
+  hooks = mkTest "hooks";
 }

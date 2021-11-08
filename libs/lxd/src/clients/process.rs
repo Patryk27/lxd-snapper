@@ -26,7 +26,7 @@ impl LxdProcessClient {
         Ok(Self { lxc: lxc.into() })
     }
 
-    pub fn new_from_path() -> Result<Self> {
+    pub fn find() -> Result<Self> {
         let lxc = find_executable_in_path("lxc")
             .ok_or_else(|| anyhow!("Couldn't find the `lxc` executable in your `PATH` - please try specifying exact location with `--lxc-path`"))
             .map_err(Error::Other)?;

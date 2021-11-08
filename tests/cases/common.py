@@ -1,12 +1,8 @@
-# ====
-#
-# This script is part of lxd-snapper's integration tests - running it standalone
-# will not work; please consult `../../README.md` for details.
-#
-# =====
-
 machine.wait_for_unit("multi-user.target")
 machine.wait_for_file("/var/lib/lxd/unix.socket")
+
+machine.succeed("mkdir /test")
+machine.succeed("mount --bind @dir@ /test")
 
 machine.succeed("truncate /dev/shm/tank -s 128MB")
 machine.succeed("zpool create tank /dev/shm/tank")
@@ -20,14 +16,15 @@ machine.succeed(
 )
 
 
-# Launches `lxd-snapper` with specified command and returns its output.
+# Launches `lxd-snapper` with specified command, asserts it succeeded and
+# returns its output.
 #
 # ```python
-# run_lxd_snapper("backup")
+# run("backup")
 # ```
-def run_lxd_snapper(cmd):
+def run(cmd):
     return machine.succeed(
-        f"@lxd-snapper@ -c @lxd-snapper-config@ {cmd}"
+        f"@lxd-snapper@ -c /test/config.yaml {cmd}"
     )
 
 
