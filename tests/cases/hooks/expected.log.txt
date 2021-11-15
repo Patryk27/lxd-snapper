@@ -1,0 +1,6 @@
+on-backup-started
+on-snapshot-created: default, test, auto-20180101-120000
+on-backup-completed
+on-prune-started
+on-snapshot-deleted: default, test, auto-20180101-120000
+on-prune-completed

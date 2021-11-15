@@ -17,7 +17,7 @@
 
   outputs = { self, naersk, nixpkgs, rust-overlay }:
     let
-      build = { system, target, RUSTFLAGS }:
+      mkPackage = { system, target, RUSTFLAGS }:
         let
           pkgs = import nixpkgs {
             inherit system;
@@ -58,7 +58,7 @@
           CARGO_BUILD_TARGET = target;
         };
 
-      check = { system }:
+      mkCheck = { system }:
         import ./tests {
           inherit nixpkgs;
 
@@ -68,13 +68,13 @@
     in
     {
       defaultPackage = {
-        i686-linux = build {
+        i686-linux = mkPackage {
           system = "i686-linux";
           target = "i686-unknown-linux-musl";
           RUSTFLAGS = "";
         };
 
-        x86_64-linux = build {
+        x86_64-linux = mkPackage {
           system = "x86_64-linux";
           target = "x86_64-unknown-linux-musl";
           RUSTFLAGS = "-C relocation-model=dynamic-no-pic";
@@ -82,11 +82,11 @@
       };
 
       checks = {
-        i686-linux = check {
+        i686-linux = mkCheck {
           system = "i686-linux";
         };
 
-        x86_64-linux = check {
+        x86_64-linux = mkCheck {
           system = "x86_64-linux";
         };
       };

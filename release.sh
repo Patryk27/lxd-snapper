@@ -3,16 +3,16 @@
 set -e
 
 function build {
-    let target="$1"
-    let name="$2"
+    local target="${1}"
+    local name="lxd-snapper-${2}"
 
     echo "Building ${target}"
     nix build ".#defaultPackage.${target}"
-    cp ./result/bin/lxd-snapper "lxd-snapper-${name}"
+    cp ./result/bin/lxd-snapper "${name}"
     rm result
 
     echo "Signing ${target}"
-    gpg --sign "lxd-snapper-${name}"
+    gpg --output "${name}.sig" --detach-sig "${name}"
 }
 
 build "i686-linux" "linux32"

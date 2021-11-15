@@ -3,79 +3,97 @@ mod find_snapshots_to_keep;
 mod summary;
 
 use self::{find_snapshots::*, find_snapshots_to_keep::*, summary::*};
-use crate::config::Policy;
-use crate::Config;
-use anyhow::Result;
-use lib_lxd::*;
-use std::io::Write;
+use crate::prelude::*;
+use lib_lxd::{LxdInstance, LxdProject};
 
-pub fn prune(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
-    Command {
-        stdout,
-        config,
-        lxd,
+pub struct Prune<'a, 'b> {
+    env: &'a mut Environment<'b>,
+    summary: Summary,
+}
+
+impl<'a, 'b> Prune<'a, 'b> {
+    pub fn new(env: &'a mut Environment<'b>) -> Self {
+        Self {
+            env,
+            summary: Summary::default(),
+        }
     }
-    .run()
-}
 
-struct Command<'a> {
-    stdout: &'a mut dyn Write,
-    config: &'a Config,
-    lxd: &'a mut dyn LxdClient,
-}
+    pub fn run(mut self) -> Result<()> {
+        self.env.config.hooks.on_prune_started()?;
 
-impl<'a> Command<'a> {
-    fn run(mut self) -> Result<()> {
-        writeln!(self.stdout, "Pruning instances:")?;
+        let cmd_result = self.try_run();
+        let hook_result = self.env.config.hooks.on_prune_completed();
 
-        let mut summary = Summary::default();
+        cmd_result.and(hook_result)
+    }
 
-        for project in self.lxd.list_projects()? {
-            for instance in self.lxd.list(&project.name)? {
-                self.try_prune_instance(&mut summary, &project, &instance)?;
-            }
+    fn try_run(&mut self) -> Result<()> {
+        writeln!(self.env.stdout, "Pruning instances:")?;
+
+        let projects = self
+            .env
+            .lxd
+            .list_projects()
+            .context("Couldn't list projects")?;
+
+        for project in projects {
+            self.process_project(&project)
+                .with_context(|| format!("Couldn't process project: {}", project.name))?;
         }
 
-        summary.print(self.stdout)
+        self.summary.print(self.env.stdout)?;
+
+        Ok(())
     }
 
-    fn try_prune_instance(
-        &mut self,
-        summary: &mut Summary,
-        project: &LxdProject,
-        instance: &LxdInstance,
-    ) -> Result<()> {
-        summary.processed_instances += 1;
+    fn process_project(&mut self, project: &LxdProject) -> Result<()> {
+        let instances = self
+            .env
+            .lxd
+            .list(&project.name)
+            .context("Couldn't list instances")?;
 
-        writeln!(self.stdout)?;
-        writeln!(self.stdout, "- {}/{}", project.name, instance.name)?;
-
-        if let Some(policy) = self.config.policy(project, instance) {
-            match self.prune_instance(project, instance, &policy) {
-                Ok((deleted_snapshots, kept_snapshots)) => {
-                    summary.deleted_snapshots += deleted_snapshots;
-                    summary.kept_snapshots += kept_snapshots;
-
-                    writeln!(self.stdout, "-> [ OK ]")?;
-                }
-
-                Err(err) => {
-                    summary.errors += 1;
-
-                    writeln!(self.stdout)?;
-                    writeln!(self.stdout, "error: {:?}", err)?;
-                    writeln!(self.stdout)?;
-                    writeln!(self.stdout, "-> [ FAILED ]")?;
-                }
-            }
-        } else {
-            writeln!(self.stdout, "-> [ EXCLUDED ]")?;
+        for instance in instances {
+            self.process_instance(project, &instance)
+                .with_context(|| format!("Couldn't process instance: {}", instance.name))?;
         }
 
         Ok(())
     }
 
-    fn prune_instance(
+    fn process_instance(&mut self, project: &LxdProject, instance: &LxdInstance) -> Result<()> {
+        self.summary.processed_instances += 1;
+
+        writeln!(self.env.stdout)?;
+        writeln!(self.env.stdout, "- {}/{}", project.name, instance.name)?;
+
+        if let Some(policy) = self.env.config.policies.build(project, instance) {
+            match self.try_process_intance(project, instance, &policy) {
+                Ok((deleted_snapshots, kept_snapshots)) => {
+                    self.summary.deleted_snapshots += deleted_snapshots;
+                    self.summary.kept_snapshots += kept_snapshots;
+
+                    writeln!(self.env.stdout, "-> [ OK ]")?;
+                }
+
+                Err(err) => {
+                    self.summary.errors += 1;
+
+                    writeln!(self.env.stdout)?;
+                    writeln!(self.env.stdout, "error: {:?}", err)?;
+                    writeln!(self.env.stdout)?;
+                    writeln!(self.env.stdout, "-> [ FAILED ]")?;
+                }
+            }
+        } else {
+            writeln!(self.env.stdout, "-> [ EXCLUDED ]")?;
+        }
+
+        Ok(())
+    }
+
+    fn try_process_intance(
         &mut self,
         project: &LxdProject,
         instance: &LxdInstance,
@@ -84,21 +102,28 @@ impl<'a> Command<'a> {
         let mut deleted_snapshots = 0;
         let mut kept_snapshots = 0;
 
-        let snapshots = find_snapshots(self.config, instance);
+        let snapshots = find_snapshots(self.env.config, instance);
         let snapshots_to_keep = find_snapshots_to_keep(policy, &snapshots);
 
         for snapshot in &snapshots {
             if snapshots_to_keep.contains(&snapshot.name) {
                 kept_snapshots += 1;
 
-                writeln!(self.stdout, "-> keeping snapshot: {}", snapshot.name)?;
+                writeln!(self.env.stdout, "-> keeping snapshot: {}", snapshot.name)?;
             } else {
                 deleted_snapshots += 1;
 
-                writeln!(self.stdout, "-> deleting snapshot: {}", snapshot.name)?;
+                writeln!(self.env.stdout, "-> deleting snapshot: {}", snapshot.name)?;
 
-                self.lxd
+                self.env
+                    .lxd
                     .delete_snapshot(&project.name, &instance.name, &snapshot.name)?;
+
+                self.env
+                    .config
+                    .hooks
+                    .on_snapshot_deleted(&project.name, &instance.name, &snapshot.name)
+                    .context("Couldn't execute the `on-snapshot-deleted` hook")?;
             }
         }
 
@@ -110,11 +135,9 @@ impl<'a> Command<'a> {
 mod tests {
     use super::*;
     use crate::assert_out;
-    use indoc::indoc;
-    use lib_lxd::test_utils::*;
-    use pretty_assertions as pa;
+    use lib_lxd::{test_utils::*, LxdClient, LxdFakeClient, LxdInstanceStatus};
 
-    const POLICY: &str = indoc!(
+    const CONFIG: &str = indoc!(
         r#"
         policies:
           main:
@@ -126,7 +149,7 @@ mod tests {
     #[test]
     fn test() {
         let mut stdout = Vec::new();
-        let config = Config::from_code(POLICY);
+        let config = Config::from_code(CONFIG);
 
         let mut lxd = LxdFakeClient::new(vec![
             LxdInstance {
@@ -141,7 +164,6 @@ mod tests {
                     snapshot("manual-2", "2000-01-01 17:00:00"),
                 ],
             },
-            //
             LxdInstance {
                 name: instance_name("instance-b"),
                 status: LxdInstanceStatus::Running,
@@ -153,7 +175,6 @@ mod tests {
                     snapshot("manual-2", "2000-01-01 16:00:00"),
                 ],
             },
-            //
             LxdInstance {
                 name: instance_name("instance-c"),
                 status: LxdInstanceStatus::Running,
@@ -166,7 +187,9 @@ mod tests {
             },
         ]);
 
-        prune(&mut stdout, &config, &mut lxd).unwrap();
+        Prune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+            .run()
+            .unwrap();
 
         assert_out!(
             r#"
@@ -207,7 +230,6 @@ mod tests {
                         snapshot("manual-2", "2000-01-01 17:00:00"),
                     ],
                 },
-                //
                 LxdInstance {
                     name: instance_name("instance-b"),
                     status: LxdInstanceStatus::Running,
@@ -219,7 +241,6 @@ mod tests {
                         snapshot("manual-2", "2000-01-01 16:00:00"),
                     ],
                 },
-                //
                 LxdInstance {
                     name: instance_name("instance-c"),
                     status: LxdInstanceStatus::Running,
@@ -231,7 +252,7 @@ mod tests {
                     ],
                 },
             ],
-            lxd.list(&LxdProjectName::default()).unwrap()
+            lxd.list(&Default::default()).unwrap()
         );
     }
 }

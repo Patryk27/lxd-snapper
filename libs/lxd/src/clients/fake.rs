@@ -20,7 +20,7 @@ impl LxdFakeClient {
             })
     }
 
-    pub fn wrap(other: &mut dyn LxdClient) -> Result<Self> {
+    pub fn from(other: &mut dyn LxdClient) -> Result<Self> {
         let mut this = LxdFakeClient::default();
 
         for project in other.list_projects()? {
