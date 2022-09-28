@@ -7,7 +7,7 @@ function build {
     local name="lxd-snapper-${2}"
 
     echo "Building ${target}"
-    nix build ".#defaultPackage.${target}"
+    nix build ".#packages.${target}.default"
     cp ./result/bin/lxd-snapper "${name}"
     rm result
 

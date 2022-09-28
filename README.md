@@ -10,12 +10,12 @@ built-in `snapshots.schedule`, just more powerful.
 
 # Requirements
 
-- LXD 4+
+- LXD 4 / 5
 - Linux (i386 or x86_64)
 
 Plus, if you plan on compiling lxd-snapper locally:
 
-- Cargo & Rust 1.56.1+
+- Cargo & Rust 1.63.0
 - Nix (for running integration tests)
 
 # Getting started

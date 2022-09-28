@@ -5,20 +5,21 @@ with subtest("Create some instances and snapshots for client-a"):
 
     machine.succeed("lxc project switch client-a")
 
-    machine.succeed("lxc launch alpine apache")
+    machine.succeed("lxc launch image apache")
     machine.succeed("lxc snapshot apache")
     assert_snapshot_exists("client-a", "apache", "snap0")
     assert_snapshot_count("client-a", "apache", ".*", 1)
 
-    machine.succeed("lxc launch alpine mysql")
+    machine.succeed("lxc launch image mysql")
     machine.succeed("lxc snapshot mysql")
     assert_snapshot_exists("client-a", "mysql", "snap0")
     assert_snapshot_count("client-a", "mysql", ".*", 1)
 
-    machine.succeed("lxc launch alpine php")
+    machine.succeed("lxc launch image php")
     machine.succeed("lxc snapshot php")
     assert_snapshot_exists("client-a", "php", "snap0")
     assert_snapshot_count("client-a", "php", ".*", 1)
+
 
 with subtest("Create some instances for client-b"):
     machine.succeed(
@@ -27,14 +28,15 @@ with subtest("Create some instances for client-b"):
 
     machine.succeed("lxc project switch client-b")
 
-    machine.succeed("lxc launch alpine apache")
+    machine.succeed("lxc launch image apache")
     assert_snapshot_count("client-b", "apache", ".*", 0)
 
-    machine.succeed("lxc launch alpine mysql")
+    machine.succeed("lxc launch image mysql")
     assert_snapshot_count("client-b", "mysql", ".*", 0)
 
-    machine.succeed("lxc launch alpine php")
+    machine.succeed("lxc launch image php")
     assert_snapshot_count("client-b", "php", ".*", 0)
+
 
 with subtest("Create some instances for client-c"):
     machine.succeed(
@@ -43,16 +45,18 @@ with subtest("Create some instances for client-c"):
 
     machine.succeed("lxc project switch client-c")
 
-    machine.succeed("lxc launch alpine apache")
+    machine.succeed("lxc launch image apache")
     assert_snapshot_count("client-c", "apache", ".*", 0)
 
-    machine.succeed("lxc launch alpine mysql")
+    machine.succeed("lxc launch image mysql")
     assert_snapshot_count("client-c", "mysql", ".*", 0)
 
-    machine.succeed("lxc launch alpine php")
+    machine.succeed("lxc launch image php")
     assert_snapshot_count("client-c", "php", ".*", 0)
 
+
 machine.succeed("lxc project switch default")
+
 
 with subtest("Backup"):
     for (date, snapshot_regex) in [
@@ -82,6 +86,7 @@ with subtest("Backup"):
             assert_snapshot_does_not_exist(project, "apache", snapshot_regex)
             assert_snapshot_does_not_exist(project, "mysql", snapshot_regex)
             assert_snapshot_does_not_exist(project, "php", snapshot_regex)
+
 
 with subtest("Prune"):
     out = run("prune")

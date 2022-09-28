@@ -3,11 +3,11 @@
 
   inputs = {
     naersk = {
-      url = "github:nmattia/naersk";
+      url = "github:nix-community/naersk";
     };
 
     nixpkgs = {
-      url = "github:nixos/nixpkgs";
+      url = "github:nixos/nixpkgs/nixos-unstable";
     };
 
     rust-overlay = {
@@ -23,7 +23,7 @@
             inherit system;
 
             overlays = [
-              rust-overlay.overlay
+              rust-overlay.overlays.default
             ];
           };
 
@@ -62,25 +62,11 @@
         import ./tests {
           inherit nixpkgs;
 
-          lxd-snapper = self.defaultPackage."${system}";
+          lxd-snapper = self.packages."${system}".default;
         };
 
     in
     {
-      defaultPackage = {
-        i686-linux = mkPackage {
-          system = "i686-linux";
-          target = "i686-unknown-linux-musl";
-          RUSTFLAGS = "";
-        };
-
-        x86_64-linux = mkPackage {
-          system = "x86_64-linux";
-          target = "x86_64-unknown-linux-musl";
-          RUSTFLAGS = "-C relocation-model=dynamic-no-pic";
-        };
-      };
-
       checks = {
         i686-linux = mkCheck {
           system = "i686-linux";
@@ -88,6 +74,24 @@
 
         x86_64-linux = mkCheck {
           system = "x86_64-linux";
+        };
+      };
+
+      packages = {
+        i686-linux = {
+          default = mkPackage {
+            system = "i686-linux";
+            target = "i686-unknown-linux-musl";
+            RUSTFLAGS = "";
+          };
+        };
+
+        x86_64-linux = {
+          default = mkPackage {
+            system = "x86_64-linux";
+            target = "x86_64-unknown-linux-musl";
+            RUSTFLAGS = "-C relocation-model=dynamic-no-pic";
+          };
         };
       };
     };

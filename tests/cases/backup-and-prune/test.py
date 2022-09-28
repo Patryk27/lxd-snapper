@@ -1,5 +1,6 @@
 machine.succeed("lxc project switch default")
-machine.succeed("lxc launch alpine test")
+machine.succeed("lxc launch image test")
+
 
 with subtest("Backup"):
     assert_snapshot_does_not_exist("default", "test", "auto\-.*")
@@ -11,6 +12,7 @@ with subtest("Backup"):
     ), f"created snapshots != 1; actual output: {out}"
 
     assert_snapshot_exists("default", "test", "auto\-.*")
+
 
 with subtest("Prune"):
     assert_snapshot_exists("default", "test", "auto\-.*")

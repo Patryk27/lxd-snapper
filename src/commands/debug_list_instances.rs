@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use prettytable::{cell, row, Table};
+use prettytable::{row, Table};
 
 pub struct DebugListInstances<'a, 'b> {
     env: &'a mut Environment<'b>,
