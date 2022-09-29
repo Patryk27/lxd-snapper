@@ -7,4 +7,5 @@ pub enum LxdInstanceStatus {
     Starting,
     Stopped,
     Stopping,
+    Ready,
 }

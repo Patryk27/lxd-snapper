@@ -280,7 +280,7 @@ policies:
   # Matches all instances that are running at the time of performing `backup` /
   # `prune`.
   #
-  # Possible values: Aborting, Running, Starting, Stopped, and Stopping.
+  # Possible values: Aborting, Running, Ready, Starting, Stopped, and Stopping.
   e:
     included-statuses: ['Running']
     
