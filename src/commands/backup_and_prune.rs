@@ -48,8 +48,19 @@ impl<'a, 'b> BackupAndPrune<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lxd::LxdFakeClient;
     use crate::{assert_err, assert_out};
-    use lib_lxd::{test_utils::*, LxdFakeClient};
+
+    fn lxd() -> LxdFakeClient {
+        let mut lxd = LxdFakeClient::default();
+
+        lxd.add(LxdFakeInstance {
+            name: "instance-a",
+            ..Default::default()
+        });
+
+        lxd
+    }
 
     mod when_backup_succeeds {
         use super::*;
@@ -60,7 +71,7 @@ mod tests {
             const CONFIG: &str = indoc!(
                 r#"
                 policies:
-                  _all:
+                  all:
                     keep-last: 0
                 "#
             );
@@ -68,8 +79,8 @@ mod tests {
             #[test]
             fn returns_ok() {
                 let mut stdout = Vec::new();
-                let config = Config::from_code(CONFIG);
-                let mut lxd = LxdFakeClient::new(vec![instance("instance-a")]);
+                let config = Config::parse(CONFIG);
+                let mut lxd = lxd();
 
                 BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
                     .run()
@@ -112,7 +123,7 @@ mod tests {
                   on-prune-completed: "exit 1"
 
                 policies:
-                  _all:
+                  all:
                     keep-last: 0
                 "#
             );
@@ -120,8 +131,8 @@ mod tests {
             #[test]
             fn returns_prune_error() {
                 let mut stdout = Vec::new();
-                let config = Config::from_code(CONFIG);
-                let mut lxd = LxdFakeClient::new(vec![instance("instance-a")]);
+                let config = Config::parse(CONFIG);
+                let mut lxd = lxd();
 
                 let result =
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
@@ -178,7 +189,7 @@ mod tests {
                   on-backup-completed: "exit 1"
 
                 policies:
-                  _all:
+                  all:
                     keep-last: 0
                 "#
             );
@@ -186,8 +197,8 @@ mod tests {
             #[test]
             fn returns_backup_error() {
                 let mut stdout = Vec::new();
-                let config = Config::from_code(CONFIG);
-                let mut lxd = LxdFakeClient::new(vec![instance("instance-a")]);
+                let config = Config::parse(CONFIG);
+                let mut lxd = lxd();
 
                 let result =
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
@@ -241,7 +252,7 @@ mod tests {
                   on-prune-completed: "exit 1"
 
                 policies:
-                  _all:
+                  all:
                     keep-last: 0
                 "#
             );
@@ -249,8 +260,8 @@ mod tests {
             #[test]
             fn returns_both_errors() {
                 let mut stdout = Vec::new();
-                let config = Config::from_code(CONFIG);
-                let mut lxd = LxdFakeClient::new(vec![instance("instance-a")]);
+                let config = Config::parse(CONFIG);
+                let mut lxd = lxd();
 
                 let result =
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))

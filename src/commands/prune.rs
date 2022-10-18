@@ -4,7 +4,6 @@ mod summary;
 
 use self::{find_snapshots::*, find_snapshots_to_keep::*, summary::*};
 use crate::prelude::*;
-use lib_lxd::{LxdInstance, LxdProject};
 
 pub struct Prune<'a, 'b> {
     env: &'a mut Environment<'b>,
@@ -20,10 +19,10 @@ impl<'a, 'b> Prune<'a, 'b> {
     }
 
     pub fn run(mut self) -> Result<()> {
-        self.env.config.hooks.on_prune_started()?;
+        self.env.config.hooks().on_prune_started()?;
 
         let cmd_result = self.try_run();
-        let hook_result = self.env.config.hooks.on_prune_completed();
+        let hook_result = self.env.config.hooks().on_prune_completed();
 
         cmd_result.and(hook_result)
     }
@@ -31,15 +30,13 @@ impl<'a, 'b> Prune<'a, 'b> {
     fn try_run(&mut self) -> Result<()> {
         writeln!(self.env.stdout, "Pruning instances:")?;
 
-        let projects = self
-            .env
-            .lxd
-            .list_projects()
-            .context("Couldn't list projects")?;
-
-        for project in projects {
-            self.process_project(&project)
-                .with_context(|| format!("Couldn't process project: {}", project.name))?;
+        if self.env.config.remotes().has_any_non_local_remotes() {
+            for remote in self.env.config.remotes().iter() {
+                self.process_remote(true, remote)
+                    .with_context(|| format!("Couldn't process remote: {}", remote.name()))?;
+            }
+        } else {
+            self.process_remote(false, &Remote::local())?;
         }
 
         self.summary.print(self.env.stdout)?;
@@ -47,29 +44,71 @@ impl<'a, 'b> Prune<'a, 'b> {
         Ok(())
     }
 
-    fn process_project(&mut self, project: &LxdProject) -> Result<()> {
+    fn process_remote(&mut self, print_remote_name: bool, remote: &Remote) -> Result<()> {
+        let projects = self
+            .env
+            .lxd
+            .projects(remote.name())
+            .context("Couldn't list projects")?;
+
+        for project in projects {
+            self.process_project(print_remote_name, remote, &project)
+                .with_context(|| format!("Couldn't process project: {}", project.name))?;
+        }
+
+        Ok(())
+    }
+
+    fn process_project(
+        &mut self,
+        print_remote_name: bool,
+        remote: &Remote,
+        project: &LxdProject,
+    ) -> Result<()> {
         let instances = self
             .env
             .lxd
-            .list(&project.name)
+            .instances(remote.name(), &project.name)
             .context("Couldn't list instances")?;
 
         for instance in instances {
-            self.process_instance(project, &instance)
+            self.process_instance(print_remote_name, remote, project, &instance)
                 .with_context(|| format!("Couldn't process instance: {}", instance.name))?;
         }
 
         Ok(())
     }
 
-    fn process_instance(&mut self, project: &LxdProject, instance: &LxdInstance) -> Result<()> {
+    fn process_instance(
+        &mut self,
+        print_remote_name: bool,
+        remote: &Remote,
+        project: &LxdProject,
+        instance: &LxdInstance,
+    ) -> Result<()> {
         self.summary.processed_instances += 1;
 
         writeln!(self.env.stdout)?;
-        writeln!(self.env.stdout, "- {}/{}", project.name, instance.name)?;
 
-        if let Some(policy) = self.env.config.policies.build(project, instance) {
-            match self.try_process_intance(project, instance, &policy) {
+        if print_remote_name {
+            writeln!(
+                self.env.stdout,
+                "- {}:{}/{}",
+                remote.name(),
+                project.name,
+                instance.name
+            )?;
+        } else {
+            writeln!(self.env.stdout, "- {}/{}", project.name, instance.name)?;
+        }
+
+        if let Some(policy) = self
+            .env
+            .config
+            .policies()
+            .build(remote.name(), project, instance)
+        {
+            match self.try_process_intance(remote, project, instance, &policy) {
                 Ok((deleted_snapshots, kept_snapshots)) => {
                     self.summary.deleted_snapshots += deleted_snapshots;
                     self.summary.kept_snapshots += kept_snapshots;
@@ -95,6 +134,7 @@ impl<'a, 'b> Prune<'a, 'b> {
 
     fn try_process_intance(
         &mut self,
+        remote: &Remote,
         project: &LxdProject,
         instance: &LxdInstance,
         policy: &Policy,
@@ -115,14 +155,22 @@ impl<'a, 'b> Prune<'a, 'b> {
 
                 writeln!(self.env.stdout, "-> deleting snapshot: {}", snapshot.name)?;
 
-                self.env
-                    .lxd
-                    .delete_snapshot(&project.name, &instance.name, &snapshot.name)?;
+                self.env.lxd.delete_snapshot(
+                    remote.name(),
+                    &project.name,
+                    &instance.name,
+                    &snapshot.name,
+                )?;
 
                 self.env
                     .config
-                    .hooks
-                    .on_snapshot_deleted(&project.name, &instance.name, &snapshot.name)
+                    .hooks()
+                    .on_snapshot_deleted(
+                        remote.name(),
+                        &project.name,
+                        &instance.name,
+                        &snapshot.name,
+                    )
                     .context("Couldn't execute the `on-snapshot-deleted` hook")?;
             }
         }
@@ -134,58 +182,59 @@ impl<'a, 'b> Prune<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assert_out;
-    use lib_lxd::{test_utils::*, LxdClient, LxdFakeClient, LxdInstanceStatus};
-
-    const CONFIG: &str = indoc!(
-        r#"
-        policies:
-          main:
-            excluded-instances: ['instance-b']
-            keep-last: 2
-        "#
-    );
+    use crate::lxd::{utils::*, LxdFakeClient};
+    use crate::{assert_lxd, assert_out};
 
     #[test]
-    fn test() {
+    fn smoke() {
         let mut stdout = Vec::new();
-        let config = Config::from_code(CONFIG);
 
-        let mut lxd = LxdFakeClient::new(vec![
-            LxdInstance {
-                name: instance_name("instance-a"),
-                status: LxdInstanceStatus::Running,
-                snapshots: vec![
-                    snapshot("manual-1", "2000-01-01 12:00:00"),
-                    snapshot("auto-1", "2000-01-01 13:00:00"),
-                    snapshot("auto-2", "2000-01-01 14:00:00"),
-                    snapshot("auto-3", "2000-01-01 15:00:00"),
-                    snapshot("auto-4", "2000-01-01 16:00:00"),
-                    snapshot("manual-2", "2000-01-01 17:00:00"),
-                ],
-            },
-            LxdInstance {
-                name: instance_name("instance-b"),
-                status: LxdInstanceStatus::Running,
-                snapshots: vec![
-                    snapshot("manual-1", "2000-01-01 12:00:00"),
-                    snapshot("auto-1", "2000-01-01 13:00:00"),
-                    snapshot("auto-2", "2000-01-01 14:00:00"),
-                    snapshot("auto-3", "2000-01-01 15:00:00"),
-                    snapshot("manual-2", "2000-01-01 16:00:00"),
-                ],
-            },
-            LxdInstance {
-                name: instance_name("instance-c"),
-                status: LxdInstanceStatus::Running,
-                snapshots: vec![
-                    snapshot("manual-1", "2000-01-01 12:00:00"),
-                    snapshot("auto-1", "2000-01-01 13:00:00"),
-                    snapshot("auto-2", "2000-01-01 14:00:00"),
-                    snapshot("manual-2", "2000-01-01 15:00:00"),
-                ],
-            },
-        ]);
+        let config = Config::parse(indoc!(
+            r#"
+            policies:
+              all:
+                excluded-instances: ['mariadb']
+                keep-last: 2
+        "#
+        ));
+
+        let mut lxd = LxdFakeClient::default();
+
+        lxd.add(LxdFakeInstance {
+            name: "elastic",
+            snapshots: vec![
+                snapshot("manual-1", "2000-01-01 12:00:00"),
+                snapshot("auto-1", "2000-01-01 13:00:00"),
+                snapshot("auto-2", "2000-01-01 14:00:00"),
+                snapshot("auto-3", "2000-01-01 15:00:00"),
+                snapshot("auto-4", "2000-01-01 16:00:00"),
+                snapshot("manual-2", "2000-01-01 17:00:00"),
+            ],
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "mariadb",
+            snapshots: vec![
+                snapshot("manual-1", "2000-01-01 12:00:00"),
+                snapshot("auto-1", "2000-01-01 13:00:00"),
+                snapshot("auto-2", "2000-01-01 14:00:00"),
+                snapshot("auto-3", "2000-01-01 15:00:00"),
+                snapshot("manual-2", "2000-01-01 16:00:00"),
+            ],
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "postgresql",
+            snapshots: vec![
+                snapshot("manual-1", "2000-01-01 12:00:00"),
+                snapshot("auto-1", "2000-01-01 13:00:00"),
+                snapshot("auto-2", "2000-01-01 14:00:00"),
+                snapshot("manual-2", "2000-01-01 15:00:00"),
+            ],
+            ..Default::default()
+        });
 
         Prune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
             .run()
@@ -195,17 +244,17 @@ mod tests {
             r#"
             Pruning instances:
             
-            - default/instance-a
+            - default/elastic
             -> keeping snapshot: auto-4
             -> keeping snapshot: auto-3
             -> deleting snapshot: auto-2
             -> deleting snapshot: auto-1
             -> [ OK ]
             
-            - default/instance-b
+            - default/mariadb
             -> [ EXCLUDED ]
             
-            - default/instance-c
+            - default/postgresql
             -> keeping snapshot: auto-2
             -> keeping snapshot: auto-1
             -> [ OK ]
@@ -218,41 +267,33 @@ mod tests {
             stdout
         );
 
-        pa::assert_eq!(
-            vec![
-                LxdInstance {
-                    name: instance_name("instance-a"),
-                    status: LxdInstanceStatus::Running,
-                    snapshots: vec![
-                        snapshot("manual-1", "2000-01-01 12:00:00"),
-                        snapshot("auto-3", "2000-01-01 15:00:00"),
-                        snapshot("auto-4", "2000-01-01 16:00:00"),
-                        snapshot("manual-2", "2000-01-01 17:00:00"),
-                    ],
-                },
-                LxdInstance {
-                    name: instance_name("instance-b"),
-                    status: LxdInstanceStatus::Running,
-                    snapshots: vec![
-                        snapshot("manual-1", "2000-01-01 12:00:00"),
-                        snapshot("auto-1", "2000-01-01 13:00:00"),
-                        snapshot("auto-2", "2000-01-01 14:00:00"),
-                        snapshot("auto-3", "2000-01-01 15:00:00"),
-                        snapshot("manual-2", "2000-01-01 16:00:00"),
-                    ],
-                },
-                LxdInstance {
-                    name: instance_name("instance-c"),
-                    status: LxdInstanceStatus::Running,
-                    snapshots: vec![
-                        snapshot("manual-1", "2000-01-01 12:00:00"),
-                        snapshot("auto-1", "2000-01-01 13:00:00"),
-                        snapshot("auto-2", "2000-01-01 14:00:00"),
-                        snapshot("manual-2", "2000-01-01 15:00:00"),
-                    ],
-                },
-            ],
-            lxd.list(&Default::default()).unwrap()
+        assert_lxd!(
+            r#"
+            local:default/elastic (Running)
+            -> manual-1
+            -> auto-3
+            -> auto-4
+            -> manual-2
+
+            local:default/mariadb (Running)
+            -> manual-1
+            -> auto-1
+            -> auto-2
+            -> auto-3
+            -> manual-2
+
+            local:default/postgresql (Running)
+            -> manual-1
+            -> auto-1
+            -> auto-2
+            -> manual-2
+            "#,
+            lxd
         );
+    }
+
+    #[test]
+    fn smoke_with_remotes() {
+        // TODO
     }
 }

@@ -13,7 +13,7 @@ pub use self::{
 #[macro_export]
 macro_rules! assert_out {
     ($expected:literal, $actual:expr) => {
-        pa::assert_eq!(indoc::indoc!($expected), String::from_utf8_lossy(&$actual));
+        pa::assert_str_eq!(indoc::indoc!($expected), String::from_utf8_lossy(&$actual));
     };
 }
 
@@ -23,6 +23,14 @@ macro_rules! assert_err {
     ($expected:literal, $actual:expr) => {
         let actual = format!("{:?}", $actual.unwrap_err());
 
-        pa::assert_eq!(indoc::indoc!($expected).trim(), actual);
+        pa::assert_str_eq!(indoc::indoc!($expected).trim(), actual);
+    };
+}
+
+#[cfg(test)]
+#[macro_export]
+macro_rules! assert_lxd {
+    ($expected:literal, $actual:expr) => {
+        pa::assert_str_eq!(indoc::indoc!($expected), $actual.to_string());
     };
 }

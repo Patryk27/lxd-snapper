@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use lib_lxd::{LxdInstanceName, LxdProjectName, LxdSnapshotName};
 use serde::Deserialize;
 use std::process::Command;
 
@@ -7,12 +6,12 @@ use std::process::Command;
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
 pub struct Hooks {
-    pub on_backup_started: Option<String>,
-    pub on_snapshot_created: Option<String>,
-    pub on_backup_completed: Option<String>,
-    pub on_prune_started: Option<String>,
-    pub on_snapshot_deleted: Option<String>,
-    pub on_prune_completed: Option<String>,
+    on_backup_started: Option<String>,
+    on_snapshot_created: Option<String>,
+    on_backup_completed: Option<String>,
+    on_prune_started: Option<String>,
+    on_snapshot_deleted: Option<String>,
+    on_prune_completed: Option<String>,
 }
 
 impl Hooks {
@@ -23,6 +22,7 @@ impl Hooks {
 
     pub fn on_snapshot_created(
         &self,
+        remote_name: &LxdRemoteName,
         project_name: &LxdProjectName,
         instance_name: &LxdInstanceName,
         snapshot_name: &LxdSnapshotName,
@@ -30,6 +30,7 @@ impl Hooks {
         Self::exec(
             self.on_snapshot_created.as_deref(),
             &[
+                ("remoteName", remote_name.as_str()),
                 ("projectName", project_name.as_str()),
                 ("instanceName", instance_name.as_str()),
                 ("snapshotName", snapshot_name.as_str()),
@@ -50,6 +51,7 @@ impl Hooks {
 
     pub fn on_snapshot_deleted(
         &self,
+        remote_name: &LxdRemoteName,
         project_name: &LxdProjectName,
         instance_name: &LxdInstanceName,
         snapshot_name: &LxdSnapshotName,
@@ -57,6 +59,7 @@ impl Hooks {
         Self::exec(
             self.on_snapshot_deleted.as_deref(),
             &[
+                ("remoteName", remote_name.as_str()),
                 ("projectName", project_name.as_str()),
                 ("instanceName", instance_name.as_str()),
                 ("snapshotName", snapshot_name.as_str()),
@@ -79,6 +82,8 @@ impl Hooks {
 
         let command = Self::render(command, variables);
 
+        // TODO log?
+
         let result = Command::new("sh")
             .arg("-c")
             .arg(command)
@@ -95,6 +100,7 @@ impl Hooks {
     }
 
     fn render(command: &str, variables: &[(&str, &str)]) -> String {
+        // TODO skip whitespaces
         variables
             .iter()
             .fold(command.to_string(), |template, (var_name, var_value)| {

@@ -1,13 +1,12 @@
 use crate::prelude::*;
 use crate::Args;
-use lib_lxd::LxdClient;
 use std::ops::DerefMut;
 
 pub fn validate(stdout: &mut dyn Write, args: Args) -> Result<()> {
     let config = load_config(stdout, &args)?;
 
     writeln!(stdout)?;
-    let mut lxd = init_lxd(stdout, &args)?;
+    let mut lxd = init_lxd(stdout, &args, &config)?;
 
     writeln!(stdout)?;
     validate_config(stdout, &config, lxd.deref_mut())?;
@@ -32,10 +31,10 @@ fn load_config(stdout: &mut dyn Write, args: &Args) -> Result<Config> {
     Ok(config)
 }
 
-fn init_lxd(stdout: &mut dyn Write, args: &Args) -> Result<Box<dyn LxdClient>> {
+fn init_lxd(stdout: &mut dyn Write, args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
     writeln!(stdout, "Connecting to LXD")?;
 
-    let lxd = crate::init_lxd(args)?;
+    let lxd = crate::init_lxd(args, config)?;
 
     writeln!(stdout, ".. [ OK ]")?;
 
@@ -47,10 +46,15 @@ fn validate_config(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdCli
 
     let mut matching_instances = 0;
 
-    for project in lxd.list_projects()? {
-        for instance in lxd.list(&project.name)? {
-            if config.policies.matches(&project, &instance) {
-                matching_instances += 1;
+    for remote in config.remotes().iter() {
+        for project in lxd.projects(remote.name())? {
+            for instance in lxd.instances(remote.name(), &project.name)? {
+                if config
+                    .policies()
+                    .matches(remote.name(), &project, &instance)
+                {
+                    matching_instances += 1;
+                }
             }
         }
     }

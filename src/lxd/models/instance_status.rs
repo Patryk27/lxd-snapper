@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum LxdInstanceStatus {
     Aborting,
     Running,

@@ -1,33 +1,43 @@
 use crate::prelude::*;
 use indexmap::IndexMap;
-use lib_lxd::{LxdInstance, LxdProject};
 use serde::Deserialize;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(transparent)]
 pub struct Policies {
-    pub policies: IndexMap<String, Policy>,
+    policies: IndexMap<String, Policy>,
 }
 
 impl Policies {
     pub fn find<'a>(
         &'a self,
+        remote: &'a LxdRemoteName,
         project: &'a LxdProject,
         instance: &'a LxdInstance,
     ) -> impl Iterator<Item = (&'a str, &'a Policy)> + 'a {
         self.policies
             .iter()
-            .filter(|(_, policy)| policy.applies_to(project, instance))
+            .filter(|(_, policy)| policy.applies_to(remote, project, instance))
             .map(|(name, policy)| (name.as_str(), policy))
     }
 
-    pub fn matches(&self, project: &LxdProject, instance: &LxdInstance) -> bool {
-        self.find(project, instance).next().is_some()
+    pub fn matches(
+        &self,
+        remote: &LxdRemoteName,
+        project: &LxdProject,
+        instance: &LxdInstance,
+    ) -> bool {
+        self.find(remote, project, instance).next().is_some()
     }
 
-    pub fn build(&self, project: &LxdProject, instance: &LxdInstance) -> Option<Policy> {
-        self.find(project, instance)
+    pub fn build(
+        &self,
+        remote: &LxdRemoteName,
+        project: &LxdProject,
+        instance: &LxdInstance,
+    ) -> Option<Policy> {
+        self.find(remote, project, instance)
             .map(|(_, policy)| policy)
             .fold(None, |result, current| {
                 Some(result.unwrap_or_default().merge_with(current.clone()))
@@ -38,7 +48,6 @@ impl Policies {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lib_lxd::*;
 
     mod build {
         use super::*;
@@ -49,11 +58,14 @@ mod tests {
 
         fn assert_policy(
             config: &Config,
+            remote_name: &str,
             project_name: &str,
             instance_name: &str,
             instance_status: LxdInstanceStatus,
             expected_policy: Option<Policy>,
         ) {
+            let remote_name = LxdRemoteName::new(remote_name);
+
             let project = LxdProject {
                 name: LxdProjectName::new(project_name),
             };
@@ -66,8 +78,9 @@ mod tests {
 
             pa::assert_eq!(
                 expected_policy,
-                config.policies.build(&project, &instance),
-                "project_name={project_name}, instance_name={instance_name}, instance_status={instance_status}",
+                config.policies.build(&remote_name, &project, &instance),
+                "remote_name={remote_name}, project_name={project_name}, instance_name={instance_name}, instance_status={instance_status}",
+                remote_name = remote_name.as_str(),
                 project_name = project_name,
                 instance_name = instance_name,
                 instance_status = format!("{:?}", instance_status),
@@ -84,6 +97,7 @@ mod tests {
             // `everyone` + `important-clients`
             assert_policy(
                 &config,
+                "local",
                 "client-a",
                 "php",
                 LxdInstanceStatus::Running,
@@ -96,6 +110,7 @@ mod tests {
             // `everyone` + `important-clients` + `databases`
             assert_policy(
                 &config,
+                "local",
                 "client-a",
                 "mysql",
                 LxdInstanceStatus::Running,
@@ -111,6 +126,7 @@ mod tests {
             // `everyone` + `important-clients`
             assert_policy(
                 &config,
+                "local",
                 "client-b",
                 "php",
                 LxdInstanceStatus::Running,
@@ -123,6 +139,7 @@ mod tests {
             // `everyone` + `important-clients` + `databases`
             assert_policy(
                 &config,
+                "local",
                 "client-b",
                 "mysql",
                 LxdInstanceStatus::Running,
@@ -138,6 +155,7 @@ mod tests {
             // `everyone` + `unimportant-clients`
             assert_policy(
                 &config,
+                "local",
                 "client-c",
                 "php",
                 LxdInstanceStatus::Running,
@@ -150,6 +168,7 @@ mod tests {
             // `everyone` + `unimportant-clients` + `databases`
             assert_policy(
                 &config,
+                "local",
                 "client-c",
                 "mysql",
                 LxdInstanceStatus::Running,
@@ -165,6 +184,7 @@ mod tests {
             // `everyone`
             assert_policy(
                 &config,
+                "local",
                 "client-d",
                 "php",
                 LxdInstanceStatus::Running,
@@ -177,6 +197,7 @@ mod tests {
             // `everyone` + `databases`
             assert_policy(
                 &config,
+                "local",
                 "client-d",
                 "mysql",
                 LxdInstanceStatus::Running,

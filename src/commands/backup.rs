@@ -2,7 +2,6 @@ mod summary;
 
 use self::summary::*;
 use crate::prelude::*;
-use lib_lxd::{LxdInstance, LxdProject, LxdSnapshotName};
 
 pub struct Backup<'a, 'b> {
     env: &'a mut Environment<'b>,
@@ -18,10 +17,10 @@ impl<'a, 'b> Backup<'a, 'b> {
     }
 
     pub fn run(mut self) -> Result<()> {
-        self.env.config.hooks.on_backup_started()?;
+        self.env.config.hooks().on_backup_started()?;
 
         let cmd_result = self.try_run();
-        let hook_result = self.env.config.hooks.on_backup_completed();
+        let hook_result = self.env.config.hooks().on_backup_completed();
 
         cmd_result.and(hook_result)
     }
@@ -29,15 +28,13 @@ impl<'a, 'b> Backup<'a, 'b> {
     fn try_run(&mut self) -> Result<()> {
         writeln!(self.env.stdout, "Backing-up instances:")?;
 
-        let projects = self
-            .env
-            .lxd
-            .list_projects()
-            .context("Couldn't list projects")?;
-
-        for project in projects {
-            self.process_project(&project)
-                .with_context(|| format!("Couldn't process project: {}", project.name))?;
+        if self.env.config.remotes().has_any_non_local_remotes() {
+            for remote in self.env.config.remotes().iter() {
+                self.process_remote(true, remote)
+                    .with_context(|| format!("Couldn't process remote: {}", remote.name()))?;
+            }
+        } else {
+            self.process_remote(false, &Remote::local())?;
         }
 
         self.summary.print(self.env.stdout)?;
@@ -45,29 +42,71 @@ impl<'a, 'b> Backup<'a, 'b> {
         Ok(())
     }
 
-    fn process_project(&mut self, project: &LxdProject) -> Result<()> {
+    fn process_remote(&mut self, print_remote_name: bool, remote: &Remote) -> Result<()> {
+        let projects = self
+            .env
+            .lxd
+            .projects(remote.name())
+            .context("Couldn't list projects")?;
+
+        for project in projects {
+            self.process_project(print_remote_name, remote, &project)
+                .with_context(|| format!("Couldn't process project: {}", project.name))?;
+        }
+
+        Ok(())
+    }
+
+    fn process_project(
+        &mut self,
+        print_remote_name: bool,
+        remote: &Remote,
+        project: &LxdProject,
+    ) -> Result<()> {
         let instances = self
             .env
             .lxd
-            .list(&project.name)
+            .instances(remote.name(), &project.name)
             .context("Couldn't list instances")?;
 
         for instance in instances {
-            self.process_instance(project, &instance)
+            self.process_instance(print_remote_name, remote, project, &instance)
                 .with_context(|| format!("Couldn't process instance: {}", instance.name))?;
         }
 
         Ok(())
     }
 
-    fn process_instance(&mut self, project: &LxdProject, instance: &LxdInstance) -> Result<()> {
+    fn process_instance(
+        &mut self,
+        print_remote_name: bool,
+        remote: &Remote,
+        project: &LxdProject,
+        instance: &LxdInstance,
+    ) -> Result<()> {
         self.summary.processed_instances += 1;
 
         writeln!(self.env.stdout)?;
-        writeln!(self.env.stdout, "- {}/{}", project.name, instance.name)?;
 
-        if self.env.config.policies.matches(project, instance) {
-            match self.try_process_instance(project, instance) {
+        if print_remote_name {
+            writeln!(
+                self.env.stdout,
+                "- {}:{}/{}",
+                remote.name(),
+                project.name,
+                instance.name
+            )?;
+        } else {
+            writeln!(self.env.stdout, "- {}/{}", project.name, instance.name)?;
+        }
+
+        if self
+            .env
+            .config
+            .policies()
+            .matches(remote.name(), project, instance)
+        {
+            match self.try_process_instance(remote, project, instance) {
                 Ok(_) => {
                     self.summary.created_snapshots += 1;
 
@@ -92,6 +131,7 @@ impl<'a, 'b> Backup<'a, 'b> {
 
     fn try_process_instance(
         &mut self,
+        remote: &Remote,
         project: &LxdProject,
         instance: &LxdInstance,
     ) -> Result<LxdSnapshotName> {
@@ -101,13 +141,15 @@ impl<'a, 'b> Backup<'a, 'b> {
 
         self.env
             .lxd
-            .create_snapshot(&project.name, &instance.name, &snapshot_name)
+            .create_snapshot(remote.name(), &project.name, &instance.name, &snapshot_name)
             .context("Couldn't create snapshot")?;
 
-        self.env
-            .config
-            .hooks
-            .on_snapshot_created(&project.name, &instance.name, &snapshot_name)?;
+        self.env.config.hooks().on_snapshot_created(
+            remote.name(),
+            &project.name,
+            &instance.name,
+            &snapshot_name,
+        )?;
 
         Ok(snapshot_name)
     }
@@ -116,45 +158,46 @@ impl<'a, 'b> Backup<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assert_out;
-    use lib_lxd::{test_utils::*, LxdClient, LxdFakeClient, LxdInstanceStatus};
-
-    const CONFIG: &str = indoc!(
-        r#"
-        policies:
-          main:
-            excluded-instances: ['instance-b']
-            included-statuses: ['Running']
-        "#
-    );
+    use crate::lxd::{utils::*, LxdFakeClient, LxdInstanceStatus};
+    use crate::{assert_lxd, assert_out};
 
     #[test]
-    fn test() {
+    fn smoke() {
         let mut stdout = Vec::new();
-        let config = Config::from_code(CONFIG);
 
-        let mut lxd = LxdFakeClient::new(vec![
-            LxdInstance {
-                name: instance_name("instance-a"),
-                status: LxdInstanceStatus::Running,
-                snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
-            },
-            LxdInstance {
-                name: instance_name("instance-b"),
-                status: LxdInstanceStatus::Running,
-                snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
-            },
-            LxdInstance {
-                name: instance_name("instance-c"),
-                status: LxdInstanceStatus::Running,
-                snapshots: Default::default(),
-            },
-            LxdInstance {
-                name: instance_name("instance-d"),
-                status: LxdInstanceStatus::Stopped,
-                snapshots: Default::default(),
-            },
-        ]);
+        let config = Config::parse(indoc!(
+            r#"
+            policies:
+              all:
+                excluded-instances: ['mariadb']
+                included-statuses: ['Running']
+            "#
+        ));
+
+        let mut lxd = LxdFakeClient::default();
+
+        lxd.add(LxdFakeInstance {
+            name: "elastic",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "mariadb",
+            snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "mongodb",
+            status: LxdInstanceStatus::Stopped,
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "mysql",
+            snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
+            ..Default::default()
+        });
 
         Backup::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
             .run()
@@ -163,21 +206,21 @@ mod tests {
         assert_out!(
             r#"
             Backing-up instances:
-            
-            - default/instance-a
+
+            - default/elastic
             -> creating snapshot: auto-19700101-000000
             -> [ OK ]
-            
-            - default/instance-b
+
+            - default/mariadb
             -> [ EXCLUDED ]
-            
-            - default/instance-c
+
+            - default/mongodb
+            -> [ EXCLUDED ]
+
+            - default/mysql
             -> creating snapshot: auto-19700101-000000
             -> [ OK ]
-            
-            - default/instance-d
-            -> [ EXCLUDED ]
-            
+
             Summary
             - processed instances: 4
             - created snapshots: 2
@@ -185,12 +228,113 @@ mod tests {
             stdout
         );
 
-        let instances = lxd.list(&Default::default()).unwrap();
+        assert_lxd!(
+            r#"
+            local:default/elastic (Running)
+            -> auto-19700101-000000
 
-        assert_eq!(4, instances.len());
-        assert_eq!(2, instances[0].snapshots.len());
-        assert_eq!(1, instances[1].snapshots.len());
-        assert_eq!(1, instances[2].snapshots.len());
-        assert_eq!(0, instances[3].snapshots.len());
+            local:default/mariadb (Running)
+            -> snapshot-1
+
+            local:default/mongodb (Stopped)
+
+            local:default/mysql (Running)
+            -> snapshot-1
+            -> auto-19700101-000000
+            "#,
+            lxd
+        );
+    }
+
+    #[test]
+    fn smoke_with_remotes() {
+        let mut stdout = Vec::new();
+
+        let config = Config::parse(indoc!(
+            r#"
+            policies:
+              all:
+                excluded-remotes: ['db-3']
+                included-statuses: ['Running']
+
+            remotes:
+              - local
+              - db-1
+              - db-2
+              - db-3
+              - db-4
+            "#
+        ));
+
+        let mut lxd = LxdFakeClient::default();
+
+        lxd.add(LxdFakeInstance {
+            remote: "db-1",
+            name: "mysql",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            remote: "db-2",
+            name: "mysql",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            remote: "db-3",
+            name: "mysql",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            remote: "db-4",
+            name: "mysql",
+            status: LxdInstanceStatus::Stopping,
+            ..Default::default()
+        });
+
+        Backup::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+            .run()
+            .unwrap();
+
+        assert_out!(
+            r#"
+            Backing-up instances:
+
+            - db-1:default/mysql
+            -> creating snapshot: auto-19700101-000000
+            -> [ OK ]
+
+            - db-2:default/mysql
+            -> creating snapshot: auto-19700101-000000
+            -> [ OK ]
+
+            - db-3:default/mysql
+            -> [ EXCLUDED ]
+
+            - db-4:default/mysql
+            -> [ EXCLUDED ]
+
+            Summary
+            - processed instances: 4
+            - created snapshots: 2
+            "#,
+            stdout
+        );
+
+        assert_lxd!(
+            r#"
+            db-1:default/mysql (Running)
+            -> auto-19700101-000000
+
+            db-2:default/mysql (Running)
+            -> auto-19700101-000000
+
+            db-3:default/mysql (Running)
+
+            db-4:default/mysql (Stopping)
+            "#,
+            lxd
+        );
     }
 }

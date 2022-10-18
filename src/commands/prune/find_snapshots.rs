@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use lib_lxd::*;
 
 pub fn find_snapshots(config: &Config, instances: &LxdInstance) -> Vec<LxdSnapshot> {
     let mut snapshots: Vec<_> = instances
@@ -16,21 +15,21 @@ pub fn find_snapshots(config: &Config, instances: &LxdInstance) -> Vec<LxdSnapsh
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lib_lxd::test_utils::*;
+    use crate::lxd::utils::*;
 
     const CONFIG: &str = indoc!(
         r#"
         snapshot-name-prefix: auto-
       
         policies:
-          main:
+          all:
             keep-last: 15
         "#
     );
 
     #[test]
     fn returns_only_snapshots_matching_format() {
-        let config = Config::from_code(CONFIG);
+        let config = Config::parse(CONFIG);
 
         let instance = LxdInstance {
             name: instance_name("test"),
@@ -58,7 +57,7 @@ mod tests {
 
     #[test]
     fn returns_snapshots_sorted_by_creation_date_descending() {
-        let config = Config::from_code(CONFIG);
+        let config = Config::parse(CONFIG);
 
         let instance = LxdInstance {
             name: instance_name("test"),

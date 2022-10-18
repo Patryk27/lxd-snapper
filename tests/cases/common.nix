@@ -21,12 +21,19 @@
   # returns its output.
   #
   # ```python
-  # run("backup")
+  # lxd_snapper("backup")
   # ```
-  def run(cmd):
-      return machine.succeed(
+  def lxd_snapper(cmd, expected_out_file = None):
+      actual_out = machine.succeed(
           f"lxd-snapper -c /test/config.yaml {cmd}"
       )
+
+      if expected_out_file:
+          expected_out = machine.succeed(f"cat {expected_out_file}")
+
+          assert expected_out == actual_out, f"outputs don't match; actual output: {actual_out}"
+
+      return actual_out
 
 
   # Asserts that given instance contains exactly `count` snapshots matching given

@@ -1,11 +1,10 @@
-machine.succeed("lxc project switch default")
 machine.succeed("lxc launch image test")
 
 
 with subtest("Backup"):
     assert_snapshot_does_not_exist("default", "test", "auto\-.*")
 
-    out = run("backup")
+    out = lxd_snapper("backup")
 
     assert (
         "created snapshots: 1" in out
@@ -17,7 +16,7 @@ with subtest("Backup"):
 with subtest("Prune"):
     assert_snapshot_exists("default", "test", "auto\-.*")
 
-    out = run("prune")
+    out = lxd_snapper("prune")
 
     assert (
         "deleted snapshots: 1" in out

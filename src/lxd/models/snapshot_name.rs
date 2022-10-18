@@ -1,10 +1,10 @@
 use serde::Deserialize;
 use std::fmt;
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize)]
-pub struct LxdProjectName(String);
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+pub struct LxdSnapshotName(String);
 
-impl LxdProjectName {
+impl LxdSnapshotName {
     pub fn new(name: impl AsRef<str>) -> Self {
         Self(name.as_ref().into())
     }
@@ -14,13 +14,7 @@ impl LxdProjectName {
     }
 }
 
-impl Default for LxdProjectName {
-    fn default() -> Self {
-        Self::new("default")
-    }
-}
-
-impl fmt::Display for LxdProjectName {
+impl fmt::Display for LxdSnapshotName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }

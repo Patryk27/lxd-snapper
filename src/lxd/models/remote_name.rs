@@ -1,10 +1,10 @@
 use serde::Deserialize;
 use std::fmt;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Deserialize)]
-pub struct LxdSnapshotName(String);
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+pub struct LxdRemoteName(String);
 
-impl LxdSnapshotName {
+impl LxdRemoteName {
     pub fn new(name: impl AsRef<str>) -> Self {
         Self(name.as_ref().into())
     }
@@ -14,7 +14,14 @@ impl LxdSnapshotName {
     }
 }
 
-impl fmt::Display for LxdSnapshotName {
+#[cfg(test)]
+impl Default for LxdRemoteName {
+    fn default() -> Self {
+        Self::new("local")
+    }
+}
+
+impl fmt::Display for LxdRemoteName {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
     }

@@ -2,13 +2,13 @@ snapshot-name-format: '%Y%m%d'
 
 policies:
   apps:
-    included-projects: ['client-a', 'client-b']
+    included-remotes: ['server-a', 'server-b']
     included-instances: ['php']
     keep-daily: 1
     keep-monthly: 1
 
   databases:
-    included-projects: ['client-a', 'client-b']
+    included-remotes: ['server-a', 'server-b']
     included-instances: ['mysql']
     keep-daily: 4
     keep-monthly: 2

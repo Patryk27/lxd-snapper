@@ -60,18 +60,18 @@ machine.succeed("lxc project switch default")
 
 with subtest("Backup"):
     for (date, snapshot_regex) in [
-        ("2012-07-30 12:00:00", "auto\-20120730\-1200\d{2}"),
-        ("2012-07-31 12:00:00", "auto\-20120731\-1200\d{2}"),
-        ("2012-08-01 12:00:00", "auto\-20120801\-1200\d{2}"),
-        ("2012-08-02 12:00:00", "auto\-20120802\-1200\d{2}"),
-        ("2012-08-03 12:00:00", "auto\-20120803\-1200\d{2}"),
-        ("2012-08-04 12:00:00", "auto\-20120804\-1200\d{2}"),
-        ("2012-08-05 12:00:00", "auto\-20120805\-1200\d{2}"),
-        ("2012-08-06 12:00:00", "auto\-20120806\-1200\d{2}"),
+        ("2012-07-30 12:00:00", "auto\-20120730"),
+        ("2012-07-31 12:00:00", "auto\-20120731"),
+        ("2012-08-01 12:00:00", "auto\-20120801"),
+        ("2012-08-02 12:00:00", "auto\-20120802"),
+        ("2012-08-03 12:00:00", "auto\-20120803"),
+        ("2012-08-04 12:00:00", "auto\-20120804"),
+        ("2012-08-05 12:00:00", "auto\-20120805"),
+        ("2012-08-06 12:00:00", "auto\-20120806"),
     ]:
         machine.succeed(f"date -s '{date}'")
 
-        out = run("backup")
+        out = lxd_snapper("backup")
 
         assert (
             "created snapshots: 4" in out
@@ -89,7 +89,7 @@ with subtest("Backup"):
 
 
 with subtest("Prune"):
-    out = run("prune")
+    out = lxd_snapper("prune")
 
     assert (
         "processed instances: 9" in out
@@ -111,23 +111,23 @@ with subtest("Prune"):
             assert_snapshot_exists(project, "mysql", "snap0")
             assert_snapshot_exists(project, "php", "snap0")
 
-        assert_snapshot_does_not_exist(project, "mysql", "auto\-20120730\-1200\d{2}")
-        assert_snapshot_exists(project, "mysql", "auto\-20120731\-1200\d{2}")
-        assert_snapshot_does_not_exist(project, "mysql", "auto\-20120801\-1200\d{2}")
-        assert_snapshot_exists(project, "mysql", "auto\-20120802\-1200\d{2}")
-        assert_snapshot_exists(project, "mysql", "auto\-20120803\-1200\d{2}")
-        assert_snapshot_exists(project, "mysql", "auto\-20120804\-1200\d{2}")
-        assert_snapshot_exists(project, "mysql", "auto\-20120805\-1200\d{2}")
-        assert_snapshot_exists(project, "mysql", "auto\-20120806\-1200\d{2}")
+        assert_snapshot_does_not_exist(project, "mysql", "auto\-20120730")
+        assert_snapshot_exists(project, "mysql", "auto\-20120731")
+        assert_snapshot_does_not_exist(project, "mysql", "auto\-20120801")
+        assert_snapshot_exists(project, "mysql", "auto\-20120802")
+        assert_snapshot_exists(project, "mysql", "auto\-20120803")
+        assert_snapshot_exists(project, "mysql", "auto\-20120804")
+        assert_snapshot_exists(project, "mysql", "auto\-20120805")
+        assert_snapshot_exists(project, "mysql", "auto\-20120806")
 
-        assert_snapshot_does_not_exist(project, "php", "auto\-20120730\-1200\d{2}")
-        assert_snapshot_does_not_exist(project, "php", "auto\-20120731\-1200\d{2}")
-        assert_snapshot_does_not_exist(project, "php", "auto\-20120801\-1200\d{2}")
-        assert_snapshot_does_not_exist(project, "php", "auto\-20120802\-1200\d{2}")
-        assert_snapshot_does_not_exist(project, "php", "auto\-20120803\-1200\d{2}")
-        assert_snapshot_does_not_exist(project, "php", "auto\-20120804\-1200\d{2}")
-        assert_snapshot_exists(project, "php", "auto\-20120806\-1200\d{2}")
-        assert_snapshot_exists(project, "php", "auto\-20120805\-1200\d{2}")
+        assert_snapshot_does_not_exist(project, "php", "auto\-20120730")
+        assert_snapshot_does_not_exist(project, "php", "auto\-20120731")
+        assert_snapshot_does_not_exist(project, "php", "auto\-20120801")
+        assert_snapshot_does_not_exist(project, "php", "auto\-20120802")
+        assert_snapshot_does_not_exist(project, "php", "auto\-20120803")
+        assert_snapshot_does_not_exist(project, "php", "auto\-20120804")
+        assert_snapshot_exists(project, "php", "auto\-20120806")
+        assert_snapshot_exists(project, "php", "auto\-20120805")
 
         assert_snapshot_count(project, "apache", ".*", manual_snapshot_count)
         assert_snapshot_count(project, "mysql", ".*", manual_snapshot_count + 6)

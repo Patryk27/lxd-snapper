@@ -1,36 +1,21 @@
-machine.succeed("lxc project switch default")
+machine.succeed("date -s '2018-01-01 12:00:00'")
 machine.succeed("lxc launch image test")
+machine.succeed("touch /tmp/log.txt")
 
+with subtest("Dry run"):
+    lxd_snapper("--dry-run backup", "/test/expected.out.1.txt")
+    lxd_snapper("--dry-run prune", "/test/expected.out.2.txt")
 
-with subtest("Backup"):
-    machine.succeed("date -s '2018-01-01 12:00:00'")
+    actual_log = machine.succeed("cat /tmp/log.txt")
+    expected_log = ""
 
-    out = run("backup")
+    assert expected_log == actual_log, f"logs don't match; actual log: {actual_log}"
 
-    assert (
-        "created snapshots: 1" in out
-    ), f"created snapshots != 1; actual output: {out}"
+with subtest("Actual run"):
+    lxd_snapper("backup", "/test/expected.out.3.txt")
+    lxd_snapper("prune", "/test/expected.out.4.txt")
 
+    actual_log = machine.succeed("cat /tmp/log.txt")
+    expected_log = machine.succeed("cat /test/expected.log.txt")
 
-with subtest("Backup (dry-run)"):
-    machine.succeed("date -s '2018-01-01 12:01:00'")
-
-    run("--dry-run backup")
-
-
-with subtest("Prune"):
-    out = run("prune")
-
-    assert (
-        "deleted snapshots: 1" in out
-    ), f"deleted snapshots != 1; actual output: {out}"
-
-
-with subtest("Prune (dry-run)"):
-    run("--dry-run prune")
-
-
-actual_log = machine.succeed("cat /tmp/log.txt")
-expected_log = machine.succeed("cat /test/expected.log.txt")
-
-assert expected_log == actual_log, f"logs don't match; actual log: {actual_log}"
+    assert expected_log == actual_log, f"logs don't match; actual log: {actual_log}"

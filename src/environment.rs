@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use lib_lxd::LxdClient;
 
 pub struct Environment<'a> {
     pub time: fn() -> DateTime<Utc>,

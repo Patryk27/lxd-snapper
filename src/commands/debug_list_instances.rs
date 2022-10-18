@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use itertools::Itertools;
 use prettytable::{row, Table};
 
 pub struct DebugListInstances<'a, 'b> {
@@ -12,15 +13,32 @@ impl<'a, 'b> DebugListInstances<'a, 'b> {
 
     pub fn run(self) -> Result<()> {
         let mut table = Table::new();
+        let has_remotes = self.env.config.remotes().has_any_non_local_remotes();
 
-        table.set_titles(row!["Project", "Instance", "Policies"]);
+        if has_remotes {
+            table.set_titles(row!["Remote", "Project", "Instance", "Policies"]);
+        } else {
+            table.set_titles(row!["Project", "Instance", "Policies"]);
+        }
 
-        for project in self.env.lxd.list_projects()? {
-            for instance in self.env.lxd.list(&project.name)? {
-                let policies = self.env.config.policies.find(&project, &instance).collect();
-                let policies = format_policies(policies);
+        for remote in self.env.config.remotes().iter() {
+            for project in self.env.lxd.projects(remote.name())? {
+                for instance in self.env.lxd.instances(remote.name(), &project.name)? {
+                    let policies = self
+                        .env
+                        .config
+                        .policies()
+                        .find(remote.name(), &project, &instance)
+                        .collect();
 
-                table.add_row(row![project.name, instance.name, policies]);
+                    let policies = format_policies(policies);
+
+                    if has_remotes {
+                        table.add_row(row![remote.name(), project.name, instance.name, policies]);
+                    } else {
+                        table.add_row(row![project.name, instance.name, policies]);
+                    }
+                }
             }
         }
 
@@ -34,8 +52,7 @@ fn format_policies(policies: Vec<(&str, &Policy)>) -> String {
     if policies.is_empty() {
         "NONE".yellow().to_string()
     } else {
-        let names: Vec<_> = policies.iter().map(|(name, _)| *name).collect();
-        names.join(" + ")
+        policies.iter().map(|(name, _)| *name).join(" + ")
     }
 }
 
@@ -43,52 +60,52 @@ fn format_policies(policies: Vec<(&str, &Policy)>) -> String {
 mod tests {
     use super::*;
     use crate::assert_out;
-    use lib_lxd::{test_utils::*, LxdFakeClient, LxdInstance, LxdInstanceStatus};
+    use crate::lxd::{LxdFakeClient, LxdInstanceStatus};
     use std::env::set_var;
 
-    const CONFIG: &str = indoc!(
-        r#"
-        policies:
-          _running:
-            included-statuses: ['Running']
-            
-          databases:
-            included-instances: ['mysql', 'redis']
-        "#
-    );
-
     #[test]
-    fn test() {
+    fn smoke() {
         let mut stdout = Vec::new();
-        let config = Config::from_code(CONFIG);
 
-        let mut lxd = LxdFakeClient::new(vec![
-            LxdInstance {
-                name: instance_name("ruby"),
-                status: LxdInstanceStatus::Running,
-                snapshots: Default::default(),
-            },
-            LxdInstance {
-                name: instance_name("rust"),
-                status: LxdInstanceStatus::Running,
-                snapshots: Default::default(),
-            },
-            LxdInstance {
-                name: instance_name("mysql"),
-                status: LxdInstanceStatus::Running,
-                snapshots: Default::default(),
-            },
-            LxdInstance {
-                name: instance_name("redis"),
-                status: LxdInstanceStatus::Stopped,
-                snapshots: Default::default(),
-            },
-            LxdInstance {
-                name: instance_name("outlander"),
-                status: LxdInstanceStatus::Stopped,
-                snapshots: Default::default(),
-            },
-        ]);
+        let config = Config::parse(indoc!(
+            r#"
+                policies:
+                  running:
+                    included-statuses: ['Running']
+
+                  databases:
+                    included-instances: ['mysql', 'redis']
+                "#
+        ));
+
+        let mut lxd = LxdFakeClient::default();
+
+        lxd.add(LxdFakeInstance {
+            name: "ruby",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "rust",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "mysql",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "redis",
+            status: LxdInstanceStatus::Stopped,
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "outlander",
+            status: LxdInstanceStatus::Stopped,
+            ..Default::default()
+        });
 
         set_var("NO_COLOR", "1");
 
@@ -98,19 +115,68 @@ mod tests {
 
         assert_out!(
             r#"
-            +---------+-----------+----------------------+
-            | Project | Instance  | Policies             |
-            +=========+===========+======================+
-            | default | mysql     | _running + databases |
-            +---------+-----------+----------------------+
-            | default | outlander | NONE                 |
-            +---------+-----------+----------------------+
-            | default | redis     | databases            |
-            +---------+-----------+----------------------+
-            | default | ruby      | _running             |
-            +---------+-----------+----------------------+
-            | default | rust      | _running             |
-            +---------+-----------+----------------------+
+            +---------+-----------+---------------------+
+            | Project | Instance  | Policies            |
+            +=========+===========+=====================+
+            | default | mysql     | running + databases |
+            +---------+-----------+---------------------+
+            | default | outlander | NONE                |
+            +---------+-----------+---------------------+
+            | default | redis     | databases           |
+            +---------+-----------+---------------------+
+            | default | ruby      | running             |
+            +---------+-----------+---------------------+
+            | default | rust      | running             |
+            +---------+-----------+---------------------+
+            "#,
+            stdout
+        );
+    }
+
+    #[test]
+    fn smoke_with_remotes() {
+        let mut stdout = Vec::new();
+
+        let config = Config::parse(indoc!(
+            r#"
+            policies:
+              important-servers:
+                included-remotes: ['server-a', 'server-b']
+
+            remotes:
+              - server-a
+              - server-b
+              - server-c
+            "#
+        ));
+
+        let mut lxd = LxdFakeClient::default();
+
+        for remote in ["local", "server-a", "server-b", "server-c"] {
+            lxd.add(LxdFakeInstance {
+                remote,
+                name: "php",
+                ..Default::default()
+            });
+        }
+
+        set_var("NO_COLOR", "1");
+
+        DebugListInstances::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+            .run()
+            .unwrap();
+
+        assert_out!(
+            r#"
+            +----------+---------+----------+-------------------+
+            | Remote   | Project | Instance | Policies          |
+            +==========+=========+==========+===================+
+            | server-a | default | php      | important-servers |
+            +----------+---------+----------+-------------------+
+            | server-b | default | php      | important-servers |
+            +----------+---------+----------+-------------------+
+            | server-c | default | php      | NONE              |
+            +----------+---------+----------+-------------------+
             "#,
             stdout
         );

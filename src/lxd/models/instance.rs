@@ -1,8 +1,8 @@
 use super::serde::null_to_default;
-use crate::{LxdInstanceName, LxdInstanceStatus, LxdSnapshot};
+use crate::lxd::{LxdInstanceName, LxdInstanceStatus, LxdSnapshot};
 use serde::Deserialize;
 
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct LxdInstance {
     pub name: LxdInstanceName,
     pub status: LxdInstanceStatus,
