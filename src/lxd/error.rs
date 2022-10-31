@@ -31,6 +31,10 @@ pub enum LxdError {
         snapshot: LxdSnapshotName,
     },
 
+    #[cfg(test)]
+    #[error("InjectedError")]
+    InjectedError,
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

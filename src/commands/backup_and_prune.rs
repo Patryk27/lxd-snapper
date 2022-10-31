@@ -12,9 +12,22 @@ impl<'a, 'b> BackupAndPrune<'a, 'b> {
     }
 
     pub fn run(self) -> Result<()> {
-        let backup_result = Backup::new(self.env).run();
+        writeln!(self.env.stdout, "{}", "Backing-up".bold())?;
+        writeln!(self.env.stdout, "----------")?;
         writeln!(self.env.stdout)?;
-        let prune_result = Prune::new(self.env).run();
+
+        let backup_result = Backup::new(self.env)
+            .with_summary_title("Backing-up summary")
+            .run();
+
+        writeln!(self.env.stdout)?;
+        writeln!(self.env.stdout, "{}", "Pruning".bold())?;
+        writeln!(self.env.stdout, "-------")?;
+        writeln!(self.env.stdout)?;
+
+        let prune_result = Prune::new(self.env)
+            .with_summary_title("Pruning summary")
+            .run();
 
         match (backup_result, prune_result) {
             (Ok(_), Ok(_)) => Ok(()),
@@ -40,7 +53,6 @@ impl<'a, 'b> BackupAndPrune<'a, 'b> {
                     format!("    {}", line)
                 }
             })
-            .collect::<Vec<_>>()
             .join("\n")
     }
 }
@@ -49,13 +61,13 @@ impl<'a, 'b> BackupAndPrune<'a, 'b> {
 mod tests {
     use super::*;
     use crate::lxd::LxdFakeClient;
-    use crate::{assert_err, assert_out};
+    use crate::{assert_result, assert_stdout};
 
     fn lxd() -> LxdFakeClient {
         let mut lxd = LxdFakeClient::default();
 
         lxd.add(LxdFakeInstance {
-            name: "instance-a",
+            name: "instance",
             ..Default::default()
         });
 
@@ -86,28 +98,30 @@ mod tests {
                     .run()
                     .unwrap();
 
-                assert_out!(
+                assert_stdout!(
                     r#"
-                    Backing-up instances:
+                    <b>Backing-up</b>
+                    ----------
 
-                    - default/instance-a
-                    -> creating snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - created snapshots: 1
+                    <b>Backing-up summary</b>
+                    ------------------
+                      processed instances: 1
+                      created snapshots: 1
 
-                    Pruning instances:
+                    <b>Pruning</b>
+                    -------
 
-                    - default/instance-a
-                    -> deleting snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - deleting snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - deleted snapshots: 1
-                    - kept snapshots: 0
+                    <b>Pruning summary</b>
+                    ---------------
+                      processed instances: 1
+                      deleted snapshots: 1
+                      kept snapshots: 0
                     "#,
                     stdout
                 );
@@ -138,33 +152,35 @@ mod tests {
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
                         .run();
 
-                assert_out!(
+                assert_stdout!(
                     r#"
-                    Backing-up instances:
+                    <b>Backing-up</b>
+                    ----------
 
-                    - default/instance-a
-                    -> creating snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - created snapshots: 1
+                    <b>Backing-up summary</b>
+                    ------------------
+                      processed instances: 1
+                      created snapshots: 1
 
-                    Pruning instances:
+                    <b>Pruning</b>
+                    -------
 
-                    - default/instance-a
-                    -> deleting snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - deleting snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - deleted snapshots: 1
-                    - kept snapshots: 0
+                    <b>Pruning summary</b>
+                    ---------------
+                      processed instances: 1
+                      deleted snapshots: 1
+                      kept snapshots: 0
                     "#,
                     stdout
                 );
 
-                assert_err!(
+                assert_result!(
                     r#"
                     Couldn't execute the `on-prune-completed` hook
 
@@ -204,33 +220,35 @@ mod tests {
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
                         .run();
 
-                assert_out!(
+                assert_stdout!(
                     r#"
-                    Backing-up instances:
+                    <b>Backing-up</b>
+                    ----------
 
-                    - default/instance-a
-                    -> creating snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - created snapshots: 1
+                    <b>Backing-up summary</b>
+                    ------------------
+                      processed instances: 1
+                      created snapshots: 1
 
-                    Pruning instances:
+                    <b>Pruning</b>
+                    -------
 
-                    - default/instance-a
-                    -> deleting snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - deleting snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - deleted snapshots: 1
-                    - kept snapshots: 0
+                    <b>Pruning summary</b>
+                    ---------------
+                      processed instances: 1
+                      deleted snapshots: 1
+                      kept snapshots: 0
                     "#,
                     stdout
                 );
 
-                assert_err!(
+                assert_result!(
                     r#"
                     Couldn't execute the `on-backup-completed` hook
 
@@ -267,33 +285,35 @@ mod tests {
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
                         .run();
 
-                assert_out!(
+                assert_stdout!(
                     r#"
-                    Backing-up instances:
+                    <b>Backing-up</b>
+                    ----------
 
-                    - default/instance-a
-                    -> creating snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - created snapshots: 1
+                    <b>Backing-up summary</b>
+                    ------------------
+                      processed instances: 1
+                      created snapshots: 1
 
-                    Pruning instances:
+                    <b>Pruning</b>
+                    -------
 
-                    - default/instance-a
-                    -> deleting snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - deleting snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - deleted snapshots: 1
-                    - kept snapshots: 0
+                    <b>Pruning summary</b>
+                    ---------------
+                      processed instances: 1
+                      deleted snapshots: 1
+                      kept snapshots: 0
                     "#,
                     stdout
                 );
 
-                assert_err!(
+                assert_result!(
                     r#"
                     Couldn't backup and prune
 

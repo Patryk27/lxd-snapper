@@ -75,7 +75,7 @@ fn validate_config(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdCli
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_err, assert_out, Command};
+    use crate::{assert_result, assert_stdout, Command};
     use std::path::PathBuf;
 
     fn config(test: &str) -> PathBuf {
@@ -101,14 +101,14 @@ mod tests {
 
         let result = validate(&mut stdout, args);
 
-        assert_out!(
+        assert_stdout!(
             r#"
             Loading configuration file: /tmp/ayy-ayy
             "#,
             stdout
         );
 
-        assert_err!(
+        assert_result!(
             r#"
             Couldn't load configuration from: /tmp/ayy-ayy
 
@@ -133,7 +133,7 @@ mod tests {
 
         let result = validate(&mut stdout, args);
 
-        assert_out!(
+        assert_stdout!(
             r#"
             Loading configuration file: src/commands/validate/tests/missing_lxc_path/config.yaml
             .. [ OK ]
@@ -143,7 +143,7 @@ mod tests {
             stdout
         );
 
-        assert_err!(
+        assert_result!(
             r#"
             Couldn't initialize LXC client
 

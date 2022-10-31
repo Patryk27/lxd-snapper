@@ -1,10 +1,8 @@
-Pruning instances:
-
-- default/test
--> deleting snapshot: auto-20180101
--> [ OK ]
+test
+  - deleting snapshot: auto-20180101 [ OK ]
 
 Summary
-- processed instances: 1
-- deleted snapshots: 1
-- kept snapshots: 0
+-------
+  processed instances: 1
+  deleted snapshots: 1
+  kept snapshots: 0

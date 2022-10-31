@@ -59,9 +59,8 @@ fn format_policies(policies: Vec<(&str, &Policy)>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assert_out;
+    use crate::assert_stdout;
     use crate::lxd::{LxdFakeClient, LxdInstanceStatus};
-    use std::env::set_var;
 
     #[test]
     fn smoke() {
@@ -107,20 +106,18 @@ mod tests {
             ..Default::default()
         });
 
-        set_var("NO_COLOR", "1");
-
         DebugListInstances::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
             .run()
             .unwrap();
 
-        assert_out!(
+        assert_stdout!(
             r#"
             +---------+-----------+---------------------+
             | Project | Instance  | Policies            |
             +=========+===========+=====================+
             | default | mysql     | running + databases |
             +---------+-----------+---------------------+
-            | default | outlander | NONE                |
+            | default | outlander | <fg=33>NONE</fg>                |
             +---------+-----------+---------------------+
             | default | redis     | databases           |
             +---------+-----------+---------------------+
@@ -160,13 +157,11 @@ mod tests {
             });
         }
 
-        set_var("NO_COLOR", "1");
-
         DebugListInstances::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
             .run()
             .unwrap();
 
-        assert_out!(
+        assert_stdout!(
             r#"
             +----------+---------+----------+-------------------+
             | Remote   | Project | Instance | Policies          |
@@ -175,7 +170,7 @@ mod tests {
             +----------+---------+----------+-------------------+
             | server-b | default | php      | important-servers |
             +----------+---------+----------+-------------------+
-            | server-c | default | php      | NONE              |
+            | server-c | default | php      | <fg=33>NONE</fg>              |
             +----------+---------+----------+-------------------+
             "#,
             stdout

@@ -31,7 +31,7 @@
       if expected_out_file:
           expected_out = machine.succeed(f"cat {expected_out_file}")
 
-          assert expected_out == actual_out, f"outputs don't match; actual output: {actual_out}"
+          assert expected_out == actual_out, f"outputs don't match; actual output:\n{actual_out}"
 
       return actual_out
 

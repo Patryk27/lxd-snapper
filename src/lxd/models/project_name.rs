@@ -13,6 +13,10 @@ impl LxdProjectName {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn is_default(&self) -> bool {
+        self.as_str() == "default"
+    }
 }
 
 #[cfg(test)]

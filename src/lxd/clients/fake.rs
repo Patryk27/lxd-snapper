@@ -6,10 +6,16 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 use std::fmt;
 
+#[cfg(test)]
+use std::collections::HashSet;
+
 #[derive(Debug, Default)]
-#[cfg_attr(test, derive(PartialEq))]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct LxdFakeClient {
     instances: BTreeMap<LxdInstanceId, LxdInstance>,
+
+    #[cfg(test)]
+    errors: HashSet<LxdFakeError<'static>>,
 }
 
 impl LxdFakeClient {
@@ -51,6 +57,11 @@ impl LxdFakeClient {
                 snapshots: instance.snapshots,
             },
         );
+    }
+
+    #[cfg(test)]
+    pub fn inject_error(&mut self, error: LxdFakeError<'static>) {
+        self.errors.insert(error);
     }
 
     fn get_mut(
@@ -112,6 +123,16 @@ impl LxdClient for LxdFakeClient {
         instance: &LxdInstanceName,
         snapshot: &LxdSnapshotName,
     ) -> LxdResult<()> {
+        #[cfg(test)]
+        if self.errors.contains(&LxdFakeError::OnCreateSnapshot {
+            remote: remote.as_str(),
+            project: project.as_str(),
+            instance: instance.as_str(),
+            snapshot: snapshot.as_str(),
+        }) {
+            return Err(LxdError::InjectedError);
+        }
+
         let instance_obj = self.get_mut(remote, project, instance)?;
 
         if instance_obj
@@ -142,6 +163,16 @@ impl LxdClient for LxdFakeClient {
         instance: &LxdInstanceName,
         snapshot: &LxdSnapshotName,
     ) -> LxdResult<()> {
+        #[cfg(test)]
+        if self.errors.contains(&LxdFakeError::OnDeleteSnapshot {
+            remote: remote.as_str(),
+            project: project.as_str(),
+            instance: instance.as_str(),
+            snapshot: snapshot.as_str(),
+        }) {
+            return Err(LxdError::InjectedError);
+        }
+
         let instance_obj = self.get_mut(remote, project, instance)?;
 
         let snapshot_idx = instance_obj
@@ -192,6 +223,7 @@ struct LxdInstanceId {
 }
 
 #[cfg(test)]
+#[derive(Clone, Debug)]
 pub struct LxdFakeInstance<'a> {
     pub remote: &'a str,
     pub project: &'a str,
@@ -211,6 +243,24 @@ impl Default for LxdFakeInstance<'static> {
             snapshots: Default::default(),
         }
     }
+}
+
+#[cfg(test)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LxdFakeError<'a> {
+    OnCreateSnapshot {
+        remote: &'a str,
+        project: &'a str,
+        instance: &'a str,
+        snapshot: &'a str,
+    },
+
+    OnDeleteSnapshot {
+        remote: &'a str,
+        project: &'a str,
+        instance: &'a str,
+        snapshot: &'a str,
+    },
 }
 
 #[cfg(test)]

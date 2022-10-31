@@ -92,8 +92,8 @@ with subtest("Prune"):
     out = lxd_snapper("prune")
 
     assert (
-        "processed instances: 9" in out
-    ), f"processed instances != 9; actual output: {out}"
+        "processed instances: 4" in out
+    ), f"processed instances != 4; actual output: {out}"
 
     assert (
         "deleted snapshots: 16" in out

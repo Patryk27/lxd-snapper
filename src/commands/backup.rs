@@ -1,6 +1,3 @@
-mod summary;
-
-use self::summary::*;
 use crate::prelude::*;
 
 pub struct Backup<'a, 'b> {
@@ -12,8 +9,13 @@ impl<'a, 'b> Backup<'a, 'b> {
     pub fn new(env: &'a mut Environment<'b>) -> Self {
         Self {
             env,
-            summary: Default::default(),
+            summary: Summary::default().with_created_snapshots(),
         }
+    }
+
+    pub fn with_summary_title(mut self, title: &'static str) -> Self {
+        self.summary.set_title(title);
+        self
     }
 
     pub fn run(mut self) -> Result<()> {
@@ -26,8 +28,6 @@ impl<'a, 'b> Backup<'a, 'b> {
     }
 
     fn try_run(&mut self) -> Result<()> {
-        writeln!(self.env.stdout, "Backing-up instances:")?;
-
         if self.env.config.remotes().has_any_non_local_remotes() {
             for remote in self.env.config.remotes().iter() {
                 self.process_remote(true, remote)
@@ -37,20 +37,26 @@ impl<'a, 'b> Backup<'a, 'b> {
             self.process_remote(false, &Remote::local())?;
         }
 
-        self.summary.print(self.env.stdout)?;
+        write!(self.env.stdout, "{}", self.summary)?;
 
-        Ok(())
+        if self.summary.has_errors() {
+            bail!("Failed to backup some of the instances");
+        }
+
+        self.summary.as_result()
     }
 
-    fn process_remote(&mut self, print_remote_name: bool, remote: &Remote) -> Result<()> {
+    fn process_remote(&mut self, print_remote: bool, remote: &Remote) -> Result<()> {
         let projects = self
             .env
             .lxd
             .projects(remote.name())
             .context("Couldn't list projects")?;
 
+        let print_project = projects.iter().any(|project| !project.name.is_default());
+
         for project in projects {
-            self.process_project(print_remote_name, remote, &project)
+            self.process_project(print_remote, remote, print_project, &project)
                 .with_context(|| format!("Couldn't process project: {}", project.name))?;
         }
 
@@ -59,8 +65,9 @@ impl<'a, 'b> Backup<'a, 'b> {
 
     fn process_project(
         &mut self,
-        print_remote_name: bool,
+        print_remote: bool,
         remote: &Remote,
+        print_project: bool,
         project: &LxdProject,
     ) -> Result<()> {
         let instances = self
@@ -70,7 +77,7 @@ impl<'a, 'b> Backup<'a, 'b> {
             .context("Couldn't list instances")?;
 
         for instance in instances {
-            self.process_instance(print_remote_name, remote, project, &instance)
+            self.process_instance(print_remote, remote, print_project, project, &instance)
                 .with_context(|| format!("Couldn't process instance: {}", instance.name))?;
         }
 
@@ -79,26 +86,25 @@ impl<'a, 'b> Backup<'a, 'b> {
 
     fn process_instance(
         &mut self,
-        print_remote_name: bool,
+        print_remote: bool,
         remote: &Remote,
+        print_project: bool,
         project: &LxdProject,
         instance: &LxdInstance,
     ) -> Result<()> {
-        self.summary.processed_instances += 1;
-
-        writeln!(self.env.stdout)?;
-
-        if print_remote_name {
-            writeln!(
-                self.env.stdout,
-                "- {}:{}/{}",
+        writeln!(
+            self.env.stdout,
+            "{}",
+            PrettyLxdInstanceName::new(
+                print_remote,
                 remote.name(),
-                project.name,
-                instance.name
-            )?;
-        } else {
-            writeln!(self.env.stdout, "- {}/{}", project.name, instance.name)?;
-        }
+                print_project,
+                &project.name,
+                &instance.name
+            )
+            .to_string()
+            .bold()
+        )?;
 
         if self
             .env
@@ -108,23 +114,29 @@ impl<'a, 'b> Backup<'a, 'b> {
         {
             match self.try_process_instance(remote, project, instance) {
                 Ok(_) => {
-                    self.summary.created_snapshots += 1;
+                    self.summary.add_created_snapshot();
 
-                    writeln!(self.env.stdout, "-> [ OK ]")?;
+                    writeln!(self.env.stdout, " {}", "[ OK ]".green())?;
                 }
 
                 Err(err) => {
-                    self.summary.errors += 1;
+                    self.summary.add_error();
 
+                    writeln!(self.env.stdout, " {}", "[ FAILED ]".red())?;
                     writeln!(self.env.stdout)?;
-                    writeln!(self.env.stdout, "{} {:?}", "error:".red(), err)?;
-                    writeln!(self.env.stdout)?;
-                    writeln!(self.env.stdout, "-> [ FAILED ]")?;
+
+                    let err = format!("{:?}", err);
+
+                    for line in err.lines() {
+                        writeln!(self.env.stdout, "  {}", line)?;
+                    }
                 }
             }
         } else {
-            writeln!(self.env.stdout, "-> [ EXCLUDED ]")?;
+            writeln!(self.env.stdout, "  - {}", "[ EXCLUDED ]".yellow())?;
         }
+
+        writeln!(self.env.stdout)?;
 
         Ok(())
     }
@@ -135,9 +147,15 @@ impl<'a, 'b> Backup<'a, 'b> {
         project: &LxdProject,
         instance: &LxdInstance,
     ) -> Result<LxdSnapshotName> {
+        self.summary.add_processed_instance();
+
         let snapshot_name = self.env.config.snapshot_name(self.env.time());
 
-        writeln!(self.env.stdout, "-> creating snapshot: {}", snapshot_name)?;
+        write!(
+            self.env.stdout,
+            "  - creating snapshot: {}",
+            snapshot_name.as_str().italic()
+        )?;
 
         self.env
             .lxd
@@ -159,7 +177,7 @@ impl<'a, 'b> Backup<'a, 'b> {
 mod tests {
     use super::*;
     use crate::lxd::{utils::*, LxdFakeClient, LxdInstanceStatus};
-    use crate::{assert_lxd, assert_out};
+    use crate::{assert_lxd, assert_result, assert_stdout};
 
     #[test]
     fn smoke() {
@@ -194,7 +212,7 @@ mod tests {
         });
 
         lxd.add(LxdFakeInstance {
-            name: "mysql",
+            name: "postgresql",
             snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             ..Default::default()
         });
@@ -203,27 +221,24 @@ mod tests {
             .run()
             .unwrap();
 
-        assert_out!(
+        assert_stdout!(
             r#"
-            Backing-up instances:
+            <b>elastic</b>
+              - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-            - default/elastic
-            -> creating snapshot: auto-19700101-000000
-            -> [ OK ]
+            <b>mariadb</b>
+              - <fg=33>[ EXCLUDED ]</fg>
 
-            - default/mariadb
-            -> [ EXCLUDED ]
+            <b>mongodb</b>
+              - <fg=33>[ EXCLUDED ]</fg>
 
-            - default/mongodb
-            -> [ EXCLUDED ]
+            <b>postgresql</b>
+              - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-            - default/mysql
-            -> creating snapshot: auto-19700101-000000
-            -> [ OK ]
-
-            Summary
-            - processed instances: 4
-            - created snapshots: 2
+            <b>Summary</b>
+            -------
+              processed instances: 2
+              created snapshots: 2
             "#,
             stdout
         );
@@ -238,7 +253,7 @@ mod tests {
 
             local:default/mongodb (Stopped)
 
-            local:default/mysql (Running)
+            local:default/postgresql (Running)
             -> snapshot-1
             -> auto-19700101-000000
             "#,
@@ -270,25 +285,25 @@ mod tests {
 
         lxd.add(LxdFakeInstance {
             remote: "db-1",
-            name: "mysql",
+            name: "postgresql",
             ..Default::default()
         });
 
         lxd.add(LxdFakeInstance {
             remote: "db-2",
-            name: "mysql",
+            name: "postgresql",
             ..Default::default()
         });
 
         lxd.add(LxdFakeInstance {
             remote: "db-3",
-            name: "mysql",
+            name: "postgresql",
             ..Default::default()
         });
 
         lxd.add(LxdFakeInstance {
             remote: "db-4",
-            name: "mysql",
+            name: "postgresql",
             status: LxdInstanceStatus::Stopping,
             ..Default::default()
         });
@@ -297,42 +312,116 @@ mod tests {
             .run()
             .unwrap();
 
-        assert_out!(
+        assert_stdout!(
             r#"
-            Backing-up instances:
+            <b>db-1:postgresql</b>
+              - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-            - db-1:default/mysql
-            -> creating snapshot: auto-19700101-000000
-            -> [ OK ]
+            <b>db-2:postgresql</b>
+              - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-            - db-2:default/mysql
-            -> creating snapshot: auto-19700101-000000
-            -> [ OK ]
+            <b>db-3:postgresql</b>
+              - <fg=33>[ EXCLUDED ]</fg>
 
-            - db-3:default/mysql
-            -> [ EXCLUDED ]
+            <b>db-4:postgresql</b>
+              - <fg=33>[ EXCLUDED ]</fg>
 
-            - db-4:default/mysql
-            -> [ EXCLUDED ]
-
-            Summary
-            - processed instances: 4
-            - created snapshots: 2
+            <b>Summary</b>
+            -------
+              processed instances: 2
+              created snapshots: 2
             "#,
             stdout
         );
 
         assert_lxd!(
             r#"
-            db-1:default/mysql (Running)
+            db-1:default/postgresql (Running)
             -> auto-19700101-000000
 
-            db-2:default/mysql (Running)
+            db-2:default/postgresql (Running)
             -> auto-19700101-000000
 
-            db-3:default/mysql (Running)
+            db-3:default/postgresql (Running)
 
-            db-4:default/mysql (Stopping)
+            db-4:default/postgresql (Stopping)
+            "#,
+            lxd
+        );
+    }
+
+    #[test]
+    fn failed_snapshot() {
+        let mut stdout = Vec::new();
+
+        let config = Config::parse(indoc!(
+            r#"
+            policies:
+              all:
+            "#
+        ));
+
+        let mut lxd = LxdFakeClient::default();
+
+        lxd.add(LxdFakeInstance {
+            name: "elastic",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "mariadb",
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "postgresql",
+            ..Default::default()
+        });
+
+        lxd.inject_error(LxdFakeError::OnCreateSnapshot {
+            remote: "local",
+            project: "default",
+            instance: "mariadb",
+            snapshot: "auto-19700101-000000",
+        });
+
+        let result = Backup::new(&mut Environment::test(&mut stdout, &config, &mut lxd)).run();
+
+        assert_stdout!(
+            r#"
+            <b>elastic</b>
+              - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
+
+            <b>mariadb</b>
+              - creating snapshot: <i>auto-19700101-000000</i> <fg=31>[ FAILED ]</fg>
+
+              Couldn't create snapshot
+
+              Caused by:
+                  InjectedError
+
+            <b>postgresql</b>
+              - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
+
+            <b>Summary</b>
+            -------
+              processed instances: 3
+              created snapshots: 2
+            "#,
+            stdout
+        );
+
+        assert_result!("Failed to backup some of the instances", result);
+
+        assert_lxd!(
+            r#"
+            local:default/elastic (Running)
+            -> auto-19700101-000000
+
+            local:default/mariadb (Running)
+
+            local:default/postgresql (Running)
+            -> auto-19700101-000000
             "#,
             lxd
         );

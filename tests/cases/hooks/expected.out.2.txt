@@ -1,11 +1,9 @@
-note: --dry-run is active, no changes will be applied
+(--dry-run is active, no changes will be applied)
 
-Pruning instances:
-
-- default/test
--> [ OK ]
+test
 
 Summary
-- processed instances: 1
-- deleted snapshots: 0
-- kept snapshots: 0
+-------
+  processed instances: 1
+  deleted snapshots: 0
+  kept snapshots: 0

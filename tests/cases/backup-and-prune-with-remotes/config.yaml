@@ -1,14 +1,5 @@
 snapshot-name-format: '%Y%m%d'
 
 policies:
-  apps:
-    included-remotes: ['server-a', 'server-b']
-    included-instances: ['php']
+  all:
     keep-daily: 1
-    keep-monthly: 1
-
-  databases:
-    included-remotes: ['server-a', 'server-b']
-    included-instances: ['mysql']
-    keep-daily: 4
-    keep-monthly: 2

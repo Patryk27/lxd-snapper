@@ -9,7 +9,13 @@ let
 
   lxd-image = import "${nixpkgs}/nixos/release.nix" {
     configuration = {
-      documentation.enable = pkgs.lib.mkForce false;
+      documentation = {
+        enable = pkgs.lib.mkForce false;
+      };
+
+      system = {
+        stateVersion = "22.11";
+      };
     };
   };
 

@@ -2,12 +2,18 @@ mod commands;
 mod config;
 mod environment;
 mod lxd;
+mod utils;
+
+#[cfg(test)]
+mod testing;
 
 mod prelude {
-    pub use crate::{config::*, environment::*, lxd::*};
-    pub use anyhow::{bail, Context, Result};
+    pub(crate) use crate::utils::*;
+    pub(crate) use crate::{config::*, environment::*, lxd::*};
+    pub use anyhow::{bail, Context, Error, Result};
     pub use chrono::{DateTime, Utc};
     pub use colored::Colorize;
+    pub use itertools::Itertools;
     pub use std::io::Write;
 
     #[cfg(test)]
@@ -24,6 +30,7 @@ use clap::{Parser, Subcommand};
 use colored::*;
 use std::io;
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 /// LXD snapshots, automated
 #[derive(Parser)]
@@ -57,7 +64,7 @@ pub enum Command {
     /// Removes stale snapshots from each instance matching the configuration
     Prune,
 
-    /// Validates configuration's syntax
+    /// Validates configuration syntax
     Validate,
 
     /// Various debug-commands
@@ -76,7 +83,22 @@ pub enum DebugCommand {
     Nuke,
 }
 
-fn main() -> Result<()> {
+fn main() -> ExitCode {
+    use std::result::Result::*;
+
+    match try_main() {
+        Ok(_) => ExitCode::SUCCESS,
+
+        Err(err) => {
+            println!();
+            println!("{}: {:?}", "Error:".red(), err);
+
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn try_main() -> Result<()> {
     let args = Args::parse();
     let stdout = &mut io::stdout();
 
@@ -86,9 +108,10 @@ fn main() -> Result<()> {
 
     if args.dry_run {
         println!(
-            "{} --dry-run is active, no changes will be applied\n",
-            "note:".green(),
+            "({} is active, no changes will be applied)",
+            "--dry-run".yellow(),
         );
+        println!();
     }
 
     let config = init_config(&args)?;
