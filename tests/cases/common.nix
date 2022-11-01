@@ -1,9 +1,9 @@
-{ lxd-config, lxd-image-metadata, lxd-image-rootfs, test }: ''
+{ lxd-config, lxd-image-metadata, lxd-image-rootfs, testPath }: ''
   machine.wait_for_unit("multi-user.target")
   machine.wait_for_file("/var/lib/lxd/unix.socket")
 
   machine.succeed("mkdir /test")
-  machine.succeed("mount --bind ${test} /test")
+  machine.succeed("mount --bind ${testPath} /test")
 
   machine.succeed("truncate /dev/shm/tank -s 4096MB")
   machine.succeed("zpool create tank /dev/shm/tank")
