@@ -1,5 +1,0 @@
-snapshot-name-format: '%Y%m%d'
-
-policies:
-  all:
-    keep-daily: 1

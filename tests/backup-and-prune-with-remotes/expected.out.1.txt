@@ -1,0 +1,13 @@
+serverA:container
+  - creating snapshot: auto-20180101 [ OK ]
+
+serverB:container
+  - [ EXCLUDED ]
+
+serverC:container
+  - creating snapshot: auto-20180101 [ OK ]
+
+Summary
+-------
+  processed instances: 2
+  created snapshots: 2

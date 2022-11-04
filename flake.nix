@@ -57,7 +57,7 @@
         };
 
       mkCheck = { system }:
-        import ./tests {
+        import ./tests.nix {
           inherit nixpkgs;
 
           lxd-snapper = self.packages."${system}".default;
