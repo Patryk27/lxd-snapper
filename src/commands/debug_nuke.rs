@@ -10,26 +10,66 @@ impl<'a, 'b> DebugNuke<'a, 'b> {
     }
 
     pub fn run(self) -> Result<()> {
-        writeln!(self.env.stdout, "Nuking instances:")?;
+        let mut summary = Summary::default().with_deleted_snapshots();
 
-        for project in self.env.lxd.list_projects()? {
-            for instance in self.env.lxd.list(&project.name)? {
-                if !self.env.config.policies.matches(&project, &instance) {
-                    continue;
-                }
+        for remote in self.env.config.remotes().iter() {
+            for project in self.env.lxd.projects(remote)? {
+                for instance in self.env.lxd.instances(remote, &project.name)? {
+                    writeln!(
+                        self.env.stdout,
+                        "{}",
+                        format!("- {}:{}/{}", remote, project.name, instance.name).bold(),
+                    )?;
 
-                writeln!(self.env.stdout)?;
-                writeln!(self.env.stdout, "- {}/{}", project.name, instance.name)?;
+                    if !self
+                        .env
+                        .config
+                        .policies()
+                        .matches(remote, &project, &instance)
+                    {
+                        writeln!(self.env.stdout, "  - {}", "[ EXCLUDED ]".yellow())?;
+                        writeln!(self.env.stdout)?;
 
-                for snapshot in instance.snapshots {
-                    writeln!(self.env.stdout, "-> deleting snapshot: {}", snapshot.name)?;
+                        continue;
+                    }
 
-                    self.env
-                        .lxd
-                        .delete_snapshot(&project.name, &instance.name, &snapshot.name)?;
+                    summary.add_processed_instance();
+
+                    for snapshot in instance.snapshots {
+                        write!(
+                            self.env.stdout,
+                            "  - deleting snapshot: {}",
+                            snapshot.name.as_str().italic()
+                        )?;
+
+                        let result = self.env.lxd.delete_snapshot(
+                            remote,
+                            &project.name,
+                            &instance.name,
+                            &snapshot.name,
+                        );
+
+                        match result {
+                            Ok(_) => {
+                                summary.add_deleted_snapshot();
+
+                                writeln!(self.env.stdout, " {}", "[ OK ]".green())?;
+                            }
+
+                            Err(err) => {
+                                writeln!(self.env.stdout, " {}", "[ FAILED ]".red())?;
+
+                                return Err(err.into());
+                            }
+                        }
+                    }
+
+                    writeln!(self.env.stdout)?;
                 }
             }
         }
+
+        write!(self.env.stdout, "{}", summary)?;
 
         Ok(())
     }
@@ -38,124 +78,224 @@ impl<'a, 'b> DebugNuke<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assert_out;
-    use lib_lxd::{test_utils::*, *};
+    use crate::lxd::{utils::*, *};
+    use crate::{assert_lxd, assert_stdout};
 
-    fn instances() -> Vec<LxdInstance> {
-        vec![
-            LxdInstance {
-                name: instance_name("instance-a"),
-                status: LxdInstanceStatus::Running,
-                snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
-            },
-            LxdInstance {
-                name: instance_name("instance-b"),
-                status: LxdInstanceStatus::Running,
-                snapshots: vec![
-                    snapshot("snapshot-1", "2000-01-01 12:00:00"),
-                    snapshot("snapshot-2", "2000-01-01 13:00:00"),
-                ],
-            },
-            LxdInstance {
-                name: instance_name("instance-c"),
-                status: LxdInstanceStatus::Stopping,
-                snapshots: Default::default(),
-            },
-            LxdInstance {
-                name: instance_name("instance-d"),
-                status: LxdInstanceStatus::Stopped,
-                snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
-            },
-        ]
+    fn lxd() -> LxdFakeClient {
+        let mut lxd = LxdFakeClient::default();
+
+        lxd.add(LxdFakeInstance {
+            name: "instance-a",
+            snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "instance-b",
+            snapshots: vec![
+                snapshot("snapshot-1", "2000-01-01 12:00:00"),
+                snapshot("snapshot-2", "2000-01-01 13:00:00"),
+            ],
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "instance-c",
+            status: LxdInstanceStatus::Stopping,
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "instance-d",
+            status: LxdInstanceStatus::Stopped,
+            snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
+            ..Default::default()
+        });
+
+        lxd.add(LxdFakeInstance {
+            name: "instance-d",
+            remote: "remote",
+            snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
+            ..Default::default()
+        });
+
+        lxd
     }
 
-    mod given_empty_policy {
-        use super::*;
+    #[test]
+    fn smoke() {
+        let mut stdout = Vec::new();
 
-        #[test]
-        fn deletes_no_snapshots() {
-            let mut stdout = Vec::new();
-            let config = Config::default();
-            let mut lxd = LxdFakeClient::new(instances());
-
-            DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
-                .run()
-                .unwrap();
-
-            assert_out!(
-                r#"
-                Nuking instances:
-                "#,
-                stdout
-            );
-
-            let actual_instances = lxd.list(&LxdProjectName::default()).unwrap();
-            let expected_instances = instances();
-
-            pa::assert_eq!(expected_instances, actual_instances);
-        }
-    }
-
-    mod given_some_policy {
-        use super::*;
-
-        const CONFIG: &str = indoc!(
+        let config = Config::parse(indoc!(
             r#"
             policies:
-              main:
+              all:
                 included-statuses: ['Running']
             "#
+        ));
+
+        let mut lxd = lxd();
+
+        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+            .run()
+            .unwrap();
+
+        assert_stdout!(
+            r#"
+            <b>- local:default/instance-a</b>
+              - deleting snapshot: <i>snapshot-1</i> <fg=32>[ OK ]</fg>
+
+            <b>- local:default/instance-b</b>
+              - deleting snapshot: <i>snapshot-1</i> <fg=32>[ OK ]</fg>
+              - deleting snapshot: <i>snapshot-2</i> <fg=32>[ OK ]</fg>
+
+            <b>- local:default/instance-c</b>
+              - <fg=33>[ EXCLUDED ]</fg>
+
+            <b>- local:default/instance-d</b>
+              - <fg=33>[ EXCLUDED ]</fg>
+
+            <b>Summary</b>
+            -------
+              processed instances: 2
+              deleted snapshots: 3
+            "#,
+            stdout
         );
 
-        #[test]
-        fn deletes_snapshots_only_for_instances_matching_that_policy() {
-            let mut stdout = Vec::new();
-            let config = Config::from_code(CONFIG);
-            let mut lxd = LxdFakeClient::new(instances());
+        assert_lxd!(
+            r#"
+            local:default/instance-a (Running)
 
-            DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
-                .run()
-                .unwrap();
+            local:default/instance-b (Running)
 
-            assert_out!(
-                r#"
-                Nuking instances:
-                
-                - default/instance-a
-                -> deleting snapshot: snapshot-1
-                
-                - default/instance-b
-                -> deleting snapshot: snapshot-1
-                -> deleting snapshot: snapshot-2
-                "#,
-                stdout
-            );
+            local:default/instance-c (Stopping)
 
-            pa::assert_eq!(
-                vec![
-                    LxdInstance {
-                        name: instance_name("instance-a"),
-                        status: LxdInstanceStatus::Running,
-                        snapshots: Default::default(),
-                    },
-                    LxdInstance {
-                        name: instance_name("instance-b"),
-                        status: LxdInstanceStatus::Running,
-                        snapshots: Default::default(),
-                    },
-                    LxdInstance {
-                        name: instance_name("instance-c"),
-                        status: LxdInstanceStatus::Stopping,
-                        snapshots: Default::default(),
-                    },
-                    LxdInstance {
-                        name: instance_name("instance-d"),
-                        status: LxdInstanceStatus::Stopped,
-                        snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
-                    },
-                ],
-                lxd.list(&LxdProjectName::default()).unwrap()
-            );
-        }
+            local:default/instance-d (Stopped)
+            -> snapshot-1
+
+            remote:default/instance-d (Running)
+            -> snapshot-1
+            "#,
+            lxd
+        );
+    }
+
+    #[test]
+    fn smoke_with_remotes() {
+        let mut stdout = Vec::new();
+
+        let config = Config::parse(indoc!(
+            r#"
+            policies:
+              all:
+                included-statuses: ['Running']
+
+            remotes:
+              - local
+              - remote
+            "#
+        ));
+
+        let mut lxd = lxd();
+
+        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+            .run()
+            .unwrap();
+
+        assert_stdout!(
+            r#"
+            <b>- local:default/instance-a</b>
+              - deleting snapshot: <i>snapshot-1</i> <fg=32>[ OK ]</fg>
+
+            <b>- local:default/instance-b</b>
+              - deleting snapshot: <i>snapshot-1</i> <fg=32>[ OK ]</fg>
+              - deleting snapshot: <i>snapshot-2</i> <fg=32>[ OK ]</fg>
+
+            <b>- local:default/instance-c</b>
+              - <fg=33>[ EXCLUDED ]</fg>
+
+            <b>- local:default/instance-d</b>
+              - <fg=33>[ EXCLUDED ]</fg>
+
+            <b>- remote:default/instance-d</b>
+              - deleting snapshot: <i>snapshot-1</i> <fg=32>[ OK ]</fg>
+
+            <b>Summary</b>
+            -------
+              processed instances: 3
+              deleted snapshots: 4
+            "#,
+            stdout
+        );
+
+        assert_lxd!(
+            r#"
+            local:default/instance-a (Running)
+
+            local:default/instance-b (Running)
+
+            local:default/instance-c (Stopping)
+
+            local:default/instance-d (Stopped)
+            -> snapshot-1
+
+            remote:default/instance-d (Running)
+            "#,
+            lxd
+        );
+    }
+
+    #[test]
+    fn empty_policy() {
+        let mut stdout = Vec::new();
+        let config = Config::default();
+        let mut lxd = lxd();
+
+        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+            .run()
+            .unwrap();
+
+        assert_stdout!(
+            r#"
+            <b>- local:default/instance-a</b>
+              - <fg=33>[ EXCLUDED ]</fg>
+
+            <b>- local:default/instance-b</b>
+              - <fg=33>[ EXCLUDED ]</fg>
+
+            <b>- local:default/instance-c</b>
+              - <fg=33>[ EXCLUDED ]</fg>
+
+            <b>- local:default/instance-d</b>
+              - <fg=33>[ EXCLUDED ]</fg>
+
+            <b>Summary</b>
+            -------
+              processed instances: 0
+              deleted snapshots: 0
+            "#,
+            stdout
+        );
+
+        assert_lxd!(
+            r#"
+            local:default/instance-a (Running)
+            -> snapshot-1
+
+            local:default/instance-b (Running)
+            -> snapshot-1
+            -> snapshot-2
+
+            local:default/instance-c (Stopping)
+
+            local:default/instance-d (Stopped)
+            -> snapshot-1
+
+            remote:default/instance-d (Running)
+            -> snapshot-1
+            "#,
+            lxd
+        );
     }
 }

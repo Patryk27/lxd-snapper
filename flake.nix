@@ -45,7 +45,6 @@
             ln -s "${./Cargo.lock}" $out/Cargo.lock
             ln -s "${./Cargo.toml}" $out/Cargo.toml
             ln -s "${./docs}" $out/docs
-            ln -s "${./libs}" $out/libs
             ln -s "${./src}" $out/src
           '';
 
@@ -54,12 +53,11 @@
           inherit src RUSTFLAGS;
 
           doCheck = true;
-          cargoTestOptions = args: args ++ [ "--workspace" ];
           CARGO_BUILD_TARGET = target;
         };
 
       mkCheck = { system }:
-        import ./tests {
+        import ./tests.nix {
           inherit nixpkgs;
 
           lxd-snapper = self.packages."${system}".default;

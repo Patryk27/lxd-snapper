@@ -1,13 +1,12 @@
 use crate::prelude::*;
 use crate::Args;
-use lib_lxd::LxdClient;
 use std::ops::DerefMut;
 
 pub fn validate(stdout: &mut dyn Write, args: Args) -> Result<()> {
     let config = load_config(stdout, &args)?;
 
     writeln!(stdout)?;
-    let mut lxd = init_lxd(stdout, &args)?;
+    let mut lxd = init_lxd(stdout, &args, &config)?;
 
     writeln!(stdout)?;
     validate_config(stdout, &config, lxd.deref_mut())?;
@@ -25,17 +24,17 @@ fn load_config(stdout: &mut dyn Write, args: &Args) -> Result<Config> {
         args.config.display()
     )?;
 
-    let config = crate::init_config(args)?;
+    let config = Config::load(&args.config)?;
 
     writeln!(stdout, ".. [ OK ]")?;
 
     Ok(config)
 }
 
-fn init_lxd(stdout: &mut dyn Write, args: &Args) -> Result<Box<dyn LxdClient>> {
+fn init_lxd(stdout: &mut dyn Write, args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
     writeln!(stdout, "Connecting to LXD")?;
 
-    let lxd = crate::init_lxd(args)?;
+    let lxd = crate::init_lxd(args, config)?;
 
     writeln!(stdout, ".. [ OK ]")?;
 
@@ -47,10 +46,12 @@ fn validate_config(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdCli
 
     let mut matching_instances = 0;
 
-    for project in lxd.list_projects()? {
-        for instance in lxd.list(&project.name)? {
-            if config.policies.matches(&project, &instance) {
-                matching_instances += 1;
+    for remote in config.remotes().iter() {
+        for project in lxd.projects(remote)? {
+            for instance in lxd.instances(remote, &project.name)? {
+                if config.policies().matches(remote, &project, &instance) {
+                    matching_instances += 1;
+                }
             }
         }
     }
@@ -71,7 +72,7 @@ fn validate_config(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdCli
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_err, assert_out, Command};
+    use crate::{assert_result, assert_stdout, Command};
     use std::path::PathBuf;
 
     fn config(test: &str) -> PathBuf {
@@ -97,14 +98,14 @@ mod tests {
 
         let result = validate(&mut stdout, args);
 
-        assert_out!(
+        assert_stdout!(
             r#"
             Loading configuration file: /tmp/ayy-ayy
             "#,
             stdout
         );
 
-        assert_err!(
+        assert_result!(
             r#"
             Couldn't load configuration from: /tmp/ayy-ayy
 
@@ -129,7 +130,7 @@ mod tests {
 
         let result = validate(&mut stdout, args);
 
-        assert_out!(
+        assert_stdout!(
             r#"
             Loading configuration file: src/commands/validate/tests/missing_lxc_path/config.yaml
             .. [ OK ]
@@ -139,7 +140,7 @@ mod tests {
             stdout
         );
 
-        assert_err!(
+        assert_result!(
             r#"
             Couldn't initialize LXC client
 

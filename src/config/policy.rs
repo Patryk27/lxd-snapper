@@ -1,4 +1,4 @@
-use lib_lxd::{LxdInstance, LxdInstanceName, LxdInstanceStatus, LxdProject, LxdProjectName};
+use crate::prelude::*;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -7,6 +7,8 @@ use std::hash::Hash;
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
 pub struct Policy {
+    pub included_remotes: Option<HashSet<LxdRemoteName>>,
+    pub excluded_remotes: Option<HashSet<LxdRemoteName>>,
     pub included_projects: Option<HashSet<LxdProjectName>>,
     pub excluded_projects: Option<HashSet<LxdProjectName>>,
     pub included_instances: Option<HashSet<LxdInstanceName>>,
@@ -51,31 +53,48 @@ impl Policy {
         self.keep_limit
     }
 
-    pub fn applies_to(&self, project: &LxdProject, instance: &LxdInstance) -> bool {
-        fn in_set<T: Hash + Eq>(items: &Option<HashSet<T>>, item: &T, default: bool) -> bool {
+    pub fn applies_to(
+        &self,
+        remote: &LxdRemoteName,
+        project: &LxdProject,
+        instance: &LxdInstance,
+    ) -> bool {
+        fn set_contains<T>(items: &Option<HashSet<T>>, item: &T, default: bool) -> bool
+        where
+            T: Hash + Eq,
+        {
             items
                 .as_ref()
                 .map(|items| items.contains(item))
                 .unwrap_or(default)
         }
 
-        let project_excluded = in_set(&self.excluded_projects, &project.name, false);
-        let name_excluded = in_set(&self.excluded_instances, &instance.name, false);
-        let status_excluded = in_set(&self.excluded_statuses, &instance.status, false);
+        let remote_included = set_contains(&self.included_remotes, remote, true);
+        let remote_excluded = set_contains(&self.excluded_remotes, remote, false);
 
-        if project_excluded || name_excluded || status_excluded {
-            return false;
-        }
+        let project_included = set_contains(&self.included_projects, &project.name, true);
+        let project_excluded = set_contains(&self.excluded_projects, &project.name, false);
 
-        let project_included = in_set(&self.included_projects, &project.name, true);
-        let name_included = in_set(&self.included_instances, &instance.name, true);
-        let status_included = in_set(&self.included_statuses, &instance.status, true);
+        let instance_included = set_contains(&self.included_instances, &instance.name, true);
+        let instance_excluded = set_contains(&self.excluded_instances, &instance.name, false);
 
-        project_included && name_included && status_included
+        let status_included = set_contains(&self.included_statuses, &instance.status, true);
+        let status_excluded = set_contains(&self.excluded_statuses, &instance.status, false);
+
+        remote_included
+            && !remote_excluded
+            && project_included
+            && !project_excluded
+            && instance_included
+            && !instance_excluded
+            && status_included
+            && !status_excluded
     }
 
     pub fn merge_with(self, other: Self) -> Self {
         Self {
+            included_remotes: None,
+            excluded_remotes: None,
             included_projects: None,
             excluded_projects: None,
             included_instances: None,
@@ -96,258 +115,242 @@ impl Policy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::*;
-    use lib_lxd::test_utils::*;
-
-    fn project_a() -> LxdProject {
-        project("a")
-    }
-
-    fn project_b() -> LxdProject {
-        project("b")
-    }
-
-    fn projects(names: &[&str]) -> HashSet<LxdProjectName> {
-        names.iter().map(LxdProjectName::new).collect()
-    }
-
-    fn instance_a() -> LxdInstance {
-        LxdInstance {
-            name: instance_name("a"),
-            status: LxdInstanceStatus::Running,
-            snapshots: Default::default(),
-        }
-    }
-
-    fn instance_b() -> LxdInstance {
-        LxdInstance {
-            name: instance_name("b"),
-            status: LxdInstanceStatus::Aborting,
-            snapshots: Default::default(),
-        }
-    }
-
-    fn instance_c() -> LxdInstance {
-        LxdInstance {
-            name: instance_name("c"),
-            status: LxdInstanceStatus::Stopped,
-            snapshots: Default::default(),
-        }
-    }
-
-    fn instances(names: &[&str]) -> HashSet<LxdInstanceName> {
-        names.iter().map(LxdInstanceName::new).collect()
-    }
-
-    fn statuses(statuses: &[LxdInstanceStatus]) -> HashSet<LxdInstanceStatus> {
-        statuses.iter().cloned().collect()
-    }
 
     mod applies_to {
         use super::*;
 
-        mod policy_with_no_restrictions {
-            use super::*;
-
-            #[test]
-            fn applies_to_every_instance() {
-                let policy = Policy::default();
-
-                assert!(policy.applies_to(&project_a(), &instance_a()));
-                assert!(policy.applies_to(&project_a(), &instance_b()));
-                assert!(policy.applies_to(&project_b(), &instance_c()));
-            }
+        fn remotes(names: &[&str]) -> HashSet<LxdRemoteName> {
+            names.iter().map(LxdRemoteName::new).collect()
         }
 
-        mod policy_with_included_projects {
-            use super::*;
-
-            #[test]
-            fn applies_only_to_instances_belonging_to_given_project() {
-                let policy = Policy {
-                    included_projects: Some(projects(&["a", "d"])),
-                    ..Default::default()
-                };
-
-                assert!(policy.applies_to(&project_a(), &instance_a()));
-                assert!(policy.applies_to(&project_a(), &instance_b()));
-                assert!(!policy.applies_to(&project_b(), &instance_c()));
-            }
+        fn projects(names: &[&str]) -> HashSet<LxdProjectName> {
+            names.iter().map(LxdProjectName::new).collect()
         }
 
-        mod policy_with_excluded_projects {
-            use super::*;
-
-            #[test]
-            fn applies_to_all_instances_except_the_ones_belonging_to_given_project() {
-                let policy = Policy {
-                    excluded_projects: Some(projects(&["a", "d"])),
-                    ..Default::default()
-                };
-
-                assert!(!policy.applies_to(&project_a(), &instance_a()));
-                assert!(!policy.applies_to(&project_a(), &instance_b()));
-                assert!(policy.applies_to(&project_b(), &instance_c()));
-            }
+        fn instances(names: &[&str]) -> HashSet<LxdInstanceName> {
+            names.iter().map(LxdInstanceName::new).collect()
         }
 
-        mod policy_with_included_instances {
-            use super::*;
-
-            #[test]
-            fn applies_only_to_instances_with_given_names() {
-                let policy = Policy {
-                    included_instances: Some(instances(&["a", "d"])),
-                    ..Default::default()
-                };
-
-                assert!(policy.applies_to(&project_a(), &instance_a()));
-                assert!(!policy.applies_to(&project_a(), &instance_b()));
-                assert!(!policy.applies_to(&project_b(), &instance_c()));
-            }
+        fn statuses(statuses: &[LxdInstanceStatus]) -> HashSet<LxdInstanceStatus> {
+            statuses.iter().cloned().collect()
         }
 
-        mod policy_with_excluded_instances {
-            use super::*;
+        fn check(
+            policy: &Policy,
+            expected: impl Fn(&LxdRemoteName, &LxdProject, &LxdInstance) -> bool,
+        ) {
+            let mut matching_instances = 0;
 
-            #[test]
-            fn applies_to_all_instances_except_the_ones_with_given_names() {
-                let policy = Policy {
-                    excluded_instances: Some(instances(&["a", "d"])),
-                    ..Default::default()
-                };
+            let instances = [
+                ("instance-a", LxdInstanceStatus::Running),
+                ("instance-b", LxdInstanceStatus::Aborting),
+                ("instance-c", LxdInstanceStatus::Stopped),
+            ];
 
-                assert!(!policy.applies_to(&project_a(), &instance_a()));
-                assert!(policy.applies_to(&project_a(), &instance_b()));
-                assert!(policy.applies_to(&project_b(), &instance_c()));
+            for remote in ["remote-a", "remote-b", "remote-c"] {
+                let remote = LxdRemoteName::new(remote);
+
+                for project in ["project-a", "project-b", "project-c"] {
+                    let project = LxdProject {
+                        name: LxdProjectName::new(project),
+                    };
+
+                    for (instance_name, instance_status) in instances {
+                        let instance = LxdInstance {
+                            name: LxdInstanceName::new(instance_name),
+                            status: instance_status,
+                            snapshots: Default::default(),
+                        };
+
+                        let actual = policy.applies_to(&remote, &project, &instance);
+                        let expected = expected(&remote, &project, &instance);
+
+                        assert_eq!(
+                            expected, actual,
+                            "\nAssertion failed for:\n- remote = {:?}\n- project = {:?}\n- instance = {:?}",
+                            remote, project, instance
+                        );
+
+                        if actual {
+                            matching_instances += 1;
+                        }
+                    }
+                }
             }
+
+            assert!(
+                matching_instances > 0,
+                "Tested policy doesn't match any instance"
+            );
         }
 
-        mod policy_with_included_statuses {
-            use super::*;
-
-            #[test]
-            fn applies_only_to_instances_with_given_statuses() {
-                let policy = Policy {
-                    included_statuses: Some(statuses(&[
-                        LxdInstanceStatus::Aborting,
-                        LxdInstanceStatus::Stopped,
-                    ])),
-                    ..Default::default()
-                };
-
-                assert!(!policy.applies_to(&project_a(), &instance_a()));
-                assert!(policy.applies_to(&project_a(), &instance_b()));
-                assert!(policy.applies_to(&project_b(), &instance_c()));
-            }
+        #[test]
+        fn given_policy_with_no_restrictions() {
+            check(&Policy::default(), |_, _, _| true);
         }
 
-        mod policy_with_excluded_statuses {
-            use super::*;
+        #[test]
+        fn given_policy_with_included_remotes() {
+            let policy = Policy {
+                included_remotes: Some(remotes(&["remote-a", "remote-c"])),
+                ..Default::default()
+            };
 
-            #[test]
-            fn applies_to_all_instances_except_the_ones_with_given_statuses() {
-                let policy = Policy {
-                    excluded_statuses: Some(statuses(&[
-                        LxdInstanceStatus::Aborting,
-                        LxdInstanceStatus::Stopped,
-                    ])),
-                    ..Default::default()
-                };
-
-                assert!(policy.applies_to(&project_a(), &instance_a()));
-                assert!(!policy.applies_to(&project_a(), &instance_b()));
-                assert!(!policy.applies_to(&project_b(), &instance_c()));
-            }
+            check(&policy, |remote, _, _| {
+                ["remote-a", "remote-c"].contains(&remote.as_str())
+            });
         }
 
-        mod policy_with_included_projects_and_included_instances_and_included_statuses {
-            use super::*;
+        #[test]
+        fn given_policy_with_excluded_remotes() {
+            let policy = Policy {
+                excluded_remotes: Some(remotes(&["remote-a", "remote-c"])),
+                ..Default::default()
+            };
 
-            #[test]
-            fn applies_only_to_instances_with_given_projects_and_names_and_statuses() {
-                let policy = Policy {
-                    included_projects: Some(projects(&["b", "c"])),
-                    included_instances: Some(instances(&["c"])),
-                    included_statuses: Some(statuses(&[
-                        LxdInstanceStatus::Aborting,
-                        LxdInstanceStatus::Stopped,
-                    ])),
-                    ..Default::default()
-                };
-
-                assert!(!policy.applies_to(&project_a(), &instance_a()));
-                assert!(!policy.applies_to(&project_a(), &instance_b()));
-                assert!(policy.applies_to(&project_b(), &instance_c()));
-            }
+            check(&policy, |remote, _, _| {
+                !["remote-a", "remote-c"].contains(&remote.as_str())
+            });
         }
 
-        mod policy_with_excluded_projects_and_excluded_instances_and_excluded_statuses {
-            use super::*;
+        #[test]
+        fn given_policy_with_included_projects() {
+            let policy = Policy {
+                included_projects: Some(projects(&["project-a", "project-c"])),
+                ..Default::default()
+            };
 
-            #[test]
-            fn applies_to_all_instances_except_the_ones_with_given_projects_and_names_and_statuses()
-            {
-                let policy = Policy {
-                    excluded_projects: Some(projects(&["b", "c"])),
-                    excluded_instances: Some(instances(&["c"])),
-                    excluded_statuses: Some(statuses(&[
-                        LxdInstanceStatus::Aborting,
-                        LxdInstanceStatus::Stopped,
-                    ])),
-                    ..Default::default()
-                };
+            check(&policy, |_, project, _| {
+                ["project-a", "project-c"].contains(&project.name.as_str())
+            });
+        }
 
-                assert!(policy.applies_to(&project_a(), &instance_a()));
-                assert!(!policy.applies_to(&project_a(), &instance_b()));
-                assert!(!policy.applies_to(&project_b(), &instance_c()));
-            }
+        #[test]
+        fn given_policy_with_excluded_projects() {
+            let policy = Policy {
+                excluded_projects: Some(projects(&["project-a", "project-c"])),
+                ..Default::default()
+            };
+
+            check(&policy, |_, project, _| {
+                !["project-a", "project-c"].contains(&project.name.as_str())
+            });
+        }
+
+        #[test]
+        fn given_policy_with_included_instances() {
+            let policy = Policy {
+                included_instances: Some(instances(&["instance-a", "instance-c"])),
+                ..Default::default()
+            };
+
+            check(&policy, |_, _, instance| {
+                ["instance-a", "instance-c"].contains(&instance.name.as_str())
+            });
+        }
+
+        #[test]
+        fn given_policy_with_excluded_instances() {
+            let policy = Policy {
+                excluded_instances: Some(instances(&["instance-a", "instance-c"])),
+                ..Default::default()
+            };
+
+            check(&policy, |_, _, instance| {
+                !["instance-a", "instance-c"].contains(&instance.name.as_str())
+            });
+        }
+
+        #[test]
+        fn given_policy_with_included_statuses() {
+            let policy = Policy {
+                included_statuses: Some(statuses(&[
+                    LxdInstanceStatus::Aborting,
+                    LxdInstanceStatus::Stopped,
+                ])),
+                ..Default::default()
+            };
+
+            check(&policy, |_, _, instance| {
+                [LxdInstanceStatus::Aborting, LxdInstanceStatus::Stopped].contains(&instance.status)
+            });
+        }
+
+        #[test]
+        fn given_policy_with_excluded_statuses() {
+            let policy = Policy {
+                excluded_statuses: Some(statuses(&[
+                    LxdInstanceStatus::Aborting,
+                    LxdInstanceStatus::Stopped,
+                ])),
+                ..Default::default()
+            };
+
+            check(&policy, |_, _, instance| {
+                ![LxdInstanceStatus::Aborting, LxdInstanceStatus::Stopped]
+                    .contains(&instance.status)
+            });
+        }
+
+        #[test]
+        fn given_policy_with_mixed_rules() {
+            let policy = Policy {
+                included_remotes: Some(remotes(&["remote-a", "remote-b"])),
+                included_projects: Some(projects(&["project-b", "project-c"])),
+                included_instances: Some(instances(&["instance-a", "instance-c"])),
+                ..Default::default()
+            };
+
+            check(&policy, |remote, project, instance| {
+                let remote_matches = ["remote-a", "remote-b"].contains(&remote.as_str());
+                let project_matches = ["project-b", "project-c"].contains(&project.name.as_str());
+                let instance_matches =
+                    ["instance-a", "instance-c"].contains(&instance.name.as_str());
+
+                remote_matches && project_matches && instance_matches
+            });
         }
     }
 
-    mod merge_with {
-        use super::*;
+    #[test]
+    fn merge_with() {
+        // Policy A: has all values set, serves as a base
+        let policy_a = Policy {
+            keep_daily: Some(10),
+            keep_weekly: Some(5),
+            keep_monthly: Some(2),
+            keep_yearly: Some(1),
+            keep_last: Some(8),
+            ..Default::default()
+        };
 
-        #[test]
-        fn test() {
-            // Policy A: has all values set, serves as a base
-            let policy_a = Policy {
-                keep_daily: Some(10),
-                keep_weekly: Some(5),
-                keep_monthly: Some(2),
-                keep_yearly: Some(1),
-                keep_last: Some(8),
-                ..Default::default()
-            };
+        // Policy B: overwrites only the `keep weekly` and `keep monthly` options
+        let policy_b = Policy {
+            keep_weekly: Some(100),
+            keep_monthly: Some(200),
+            ..Default::default()
+        };
 
-            // Policy B: overwrites only the `keep weekly` and `keep monthly` options
-            let policy_b = Policy {
-                keep_weekly: Some(100),
-                keep_monthly: Some(200),
-                ..Default::default()
-            };
+        // Policy C: overwrites only the `keep yearly` option
+        let policy_c = Policy {
+            keep_yearly: Some(100),
+            ..Default::default()
+        };
 
-            // Policy C: overwrites only the `keep yearly` option
-            let policy_c = Policy {
-                keep_yearly: Some(100),
-                ..Default::default()
-            };
+        // Policy A + B
+        let policy_ab = Policy {
+            keep_weekly: Some(100),  // Overwritten from policy B
+            keep_monthly: Some(200), // Overwritten from policy B
+            ..policy_a.clone()
+        };
 
-            // Policy A + B
-            let policy_ab = Policy {
-                keep_weekly: Some(100),  // Overwritten from policy B
-                keep_monthly: Some(200), // Overwritten from policy B
-                ..policy_a.clone()
-            };
+        // Policy A + C
+        let policy_ac = Policy {
+            keep_yearly: Some(100), // Overwritten from policy C
+            ..policy_a.clone()
+        };
 
-            // Policy A + C
-            let policy_ac = Policy {
-                keep_yearly: Some(100), // Overwritten from policy C
-                ..policy_a.clone()
-            };
-
-            pa::assert_eq!(policy_a.clone().merge_with(policy_b), policy_ab);
-            pa::assert_eq!(policy_a.merge_with(policy_c), policy_ac);
-        }
+        pa::assert_eq!(policy_a.clone().merge_with(policy_b), policy_ab);
+        pa::assert_eq!(policy_a.merge_with(policy_c), policy_ac);
     }
 }

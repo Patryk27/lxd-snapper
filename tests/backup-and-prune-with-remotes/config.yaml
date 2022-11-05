@@ -1,0 +1,11 @@
+snapshot-name-format: '%Y%m%d'
+
+remotes:
+  - serverA
+  - serverB
+  - serverC
+
+policies:
+  all:
+    excluded-remotes: ['serverB']
+    keep-last: 0

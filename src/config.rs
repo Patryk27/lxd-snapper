@@ -1,30 +1,38 @@
 mod hooks;
 mod policies;
 mod policy;
+mod remotes;
 
 use crate::prelude::*;
 use chrono::TimeZone;
-use lib_lxd::LxdSnapshotName;
 use serde::Deserialize;
 use std::{fmt::Display, fs, path::Path};
 
-pub use self::{hooks::*, policies::*, policy::*};
+pub use self::{hooks::*, policies::*, policy::*, remotes::*};
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default = "default_snapshot_name_prefix")]
-    pub snapshot_name_prefix: String,
+    snapshot_name_prefix: String,
+
+    #[serde(default = "default_snapshot_name_format")]
+    snapshot_name_format: String,
+
     #[serde(default)]
-    pub hooks: Hooks,
+    hooks: Hooks,
+
     #[serde(default)]
-    pub policies: Policies,
+    remotes: Remotes,
+
+    #[serde(default)]
+    policies: Policies,
 }
 
 impl Config {
     #[cfg(test)]
-    pub fn from_code(code: &str) -> Self {
+    pub fn parse(code: &str) -> Self {
         serde_yaml::from_str(code).unwrap()
     }
 
@@ -39,12 +47,25 @@ impl Config {
         result.with_context(|| format!("Couldn't load configuration from: {}", file.display()))
     }
 
+    pub fn hooks(&self) -> &Hooks {
+        &self.hooks
+    }
+
+    pub fn policies(&self) -> &Policies {
+        &self.policies
+    }
+
+    pub fn remotes(&self) -> &Remotes {
+        &self.remotes
+    }
+
     pub fn snapshot_name<Tz>(&self, now: DateTime<Tz>) -> LxdSnapshotName
     where
         Tz: TimeZone,
         Tz::Offset: Display,
     {
-        let format = format!("{}%Y%m%d-%H%M%S", self.snapshot_name_prefix);
+        let format = format!("{}{}", self.snapshot_name_prefix, self.snapshot_name_format);
+
         LxdSnapshotName::new(now.format(&format).to_string())
     }
 
@@ -57,10 +78,14 @@ fn default_snapshot_name_prefix() -> String {
     "auto-".into()
 }
 
+fn default_snapshot_name_format() -> String {
+    "%Y%m%d-%H%M%S".into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lib_lxd::test_utils::*;
+    use crate::lxd::utils::*;
 
     mod load {
         use super::*;
@@ -85,90 +110,63 @@ mod tests {
 
     mod snapshot_name {
         use super::*;
-        use chrono::FixedOffset;
+        use test_case::test_case;
 
-        fn config(snapshot_name_prefix: &str) -> Config {
-            Config {
+        #[test_case("", "%Y%m%d-%H%M%S", "20120824-123456")]
+        #[test_case("auto-", "%Y%m%d-%H%M%S", "auto-20120824-123456")]
+        #[test_case("auto-", "%Y%m%d", "auto-20120824")]
+        fn test(snapshot_name_prefix: &str, snapshot_name_format: &str, expected: &str) {
+            let target = Config {
                 snapshot_name_prefix: snapshot_name_prefix.into(),
+                snapshot_name_format: snapshot_name_format.into(),
                 ..Default::default()
-            }
-        }
+            };
 
-        fn now() -> DateTime<FixedOffset> {
-            DateTime::parse_from_rfc3339("2012-08-24T12:34:56-00:00").unwrap()
-        }
+            let actual = target
+                .snapshot_name(DateTime::parse_from_rfc3339("2012-08-24T12:34:56-00:00").unwrap());
 
-        mod given_empty_prefix {
-            use super::*;
-
-            #[test]
-            fn returns_snapshot_name() {
-                let actual = config("").snapshot_name(now());
-                let expected = "20120824-123456";
-
-                pa::assert_eq!(expected, actual.as_str());
-            }
-        }
-
-        mod given_some_prefix {
-            use super::*;
-
-            #[test]
-            fn returns_snapshot_name() {
-                let actual = config("auto-").snapshot_name(now());
-                let expected = "auto-20120824-123456";
-
-                pa::assert_eq!(expected, actual.as_str());
-            }
+            assert_eq!(expected, actual.as_str());
         }
     }
 
     mod matches_snapshot_name {
         use super::*;
 
-        fn config(snapshot_name_prefix: &str) -> Config {
+        fn target(snapshot_name_prefix: &str) -> Config {
             Config {
                 snapshot_name_prefix: snapshot_name_prefix.into(),
                 ..Default::default()
             }
         }
 
-        mod given_empty_prefix {
-            use super::*;
+        #[test]
+        fn given_empty_prefix() {
+            let target = target("");
 
-            #[test]
-            fn returns_always_true() {
-                let config = config("");
+            assert!(target.matches_snapshot_name(&snapshot_name("auto")));
+            assert!(target.matches_snapshot_name(&snapshot_name("auto-20120824")));
+            assert!(target.matches_snapshot_name(&snapshot_name("auto-20120824-123456")));
+            assert!(target.matches_snapshot_name(&snapshot_name("auto-20120824-123456-bus")));
 
-                assert!(config.matches_snapshot_name(&snapshot_name("auto")));
-                assert!(config.matches_snapshot_name(&snapshot_name("auto-20120824")));
-                assert!(config.matches_snapshot_name(&snapshot_name("auto-20120824-123456")));
-                assert!(config.matches_snapshot_name(&snapshot_name("auto-20120824-123456-bus")));
-
-                assert!(config.matches_snapshot_name(&snapshot_name("manual")));
-                assert!(config.matches_snapshot_name(&snapshot_name("manual-20120824")));
-                assert!(config.matches_snapshot_name(&snapshot_name("manual-20120824-123456")));
-                assert!(config.matches_snapshot_name(&snapshot_name("manual-20120824-123456-bus")));
-            }
+            assert!(target.matches_snapshot_name(&snapshot_name("manual")));
+            assert!(target.matches_snapshot_name(&snapshot_name("manual-20120824")));
+            assert!(target.matches_snapshot_name(&snapshot_name("manual-20120824-123456")));
+            assert!(target.matches_snapshot_name(&snapshot_name("manual-20120824-123456-bus")));
         }
 
-        mod given_some_prefix {
-            use super::*;
+        #[test]
+        fn given_some_prefix() {
+            let target = target("auto-");
 
-            #[test]
-            fn returns_true_when_snapshot_name_begins_with_this_prefix() {
-                let config = config("auto-");
+            assert!(!target.matches_snapshot_name(&snapshot_name("auto")));
+            assert!(target.matches_snapshot_name(&snapshot_name("auto-20120824")));
+            assert!(target.matches_snapshot_name(&snapshot_name("auto-20120824-123456")));
+            assert!(target.matches_snapshot_name(&snapshot_name("auto-20120824-123456-bus")));
 
-                assert!(!config.matches_snapshot_name(&snapshot_name("auto")));
-                assert!(config.matches_snapshot_name(&snapshot_name("auto-20120824")));
-                assert!(config.matches_snapshot_name(&snapshot_name("auto-20120824-123456")));
-                assert!(config.matches_snapshot_name(&snapshot_name("auto-20120824-123456-bus")));
-
-                assert!(!config.matches_snapshot_name(&snapshot_name("manual")));
-                assert!(!config.matches_snapshot_name(&snapshot_name("manual-20120824")));
-                assert!(!config.matches_snapshot_name(&snapshot_name("manual-20120824-123456")));
-                assert!(!config.matches_snapshot_name(&snapshot_name("manual-20120824-123456-bus")));
-            }
+            assert!(!target.matches_snapshot_name(&snapshot_name("manual")));
+            assert!(!target.matches_snapshot_name(&snapshot_name("manual-20120824")));
+            assert!(!target.matches_snapshot_name(&snapshot_name("manual-20120824-123456")));
+            assert!(!target.matches_snapshot_name(&snapshot_name("manual-20120824-123456-bus")));
         }
     }
 }

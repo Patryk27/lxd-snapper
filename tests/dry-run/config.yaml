@@ -1,0 +1,5 @@
+snapshot-name-format: '%Y%m%d'
+
+policies:
+  all:
+    keep-last: 0

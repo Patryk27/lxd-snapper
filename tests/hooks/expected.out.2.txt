@@ -1,0 +1,9 @@
+(--dry-run is active, no changes will be applied)
+
+test
+
+Summary
+-------
+  processed instances: 1
+  deleted snapshots: 0
+  kept snapshots: 0

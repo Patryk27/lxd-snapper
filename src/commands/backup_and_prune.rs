@@ -12,9 +12,22 @@ impl<'a, 'b> BackupAndPrune<'a, 'b> {
     }
 
     pub fn run(self) -> Result<()> {
-        let backup_result = Backup::new(self.env).run();
+        writeln!(self.env.stdout, "{}", "Backing-up".bold())?;
+        writeln!(self.env.stdout, "----------")?;
         writeln!(self.env.stdout)?;
-        let prune_result = Prune::new(self.env).run();
+
+        let backup_result = Backup::new(self.env)
+            .with_summary_title("Backing-up summary")
+            .run();
+
+        writeln!(self.env.stdout)?;
+        writeln!(self.env.stdout, "{}", "Pruning".bold())?;
+        writeln!(self.env.stdout, "-------")?;
+        writeln!(self.env.stdout)?;
+
+        let prune_result = Prune::new(self.env)
+            .with_summary_title("Pruning summary")
+            .run();
 
         match (backup_result, prune_result) {
             (Ok(_), Ok(_)) => Ok(()),
@@ -40,7 +53,6 @@ impl<'a, 'b> BackupAndPrune<'a, 'b> {
                     format!("    {}", line)
                 }
             })
-            .collect::<Vec<_>>()
             .join("\n")
     }
 }
@@ -48,8 +60,19 @@ impl<'a, 'b> BackupAndPrune<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_err, assert_out};
-    use lib_lxd::{test_utils::*, LxdFakeClient};
+    use crate::lxd::LxdFakeClient;
+    use crate::{assert_result, assert_stdout};
+
+    fn lxd() -> LxdFakeClient {
+        let mut lxd = LxdFakeClient::default();
+
+        lxd.add(LxdFakeInstance {
+            name: "instance",
+            ..Default::default()
+        });
+
+        lxd
+    }
 
     mod when_backup_succeeds {
         use super::*;
@@ -60,7 +83,7 @@ mod tests {
             const CONFIG: &str = indoc!(
                 r#"
                 policies:
-                  _all:
+                  all:
                     keep-last: 0
                 "#
             );
@@ -68,35 +91,37 @@ mod tests {
             #[test]
             fn returns_ok() {
                 let mut stdout = Vec::new();
-                let config = Config::from_code(CONFIG);
-                let mut lxd = LxdFakeClient::new(vec![instance("instance-a")]);
+                let config = Config::parse(CONFIG);
+                let mut lxd = lxd();
 
                 BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
                     .run()
                     .unwrap();
 
-                assert_out!(
+                assert_stdout!(
                     r#"
-                    Backing-up instances:
+                    <b>Backing-up</b>
+                    ----------
 
-                    - default/instance-a
-                    -> creating snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - created snapshots: 1
+                    <b>Backing-up summary</b>
+                    ------------------
+                      processed instances: 1
+                      created snapshots: 1
 
-                    Pruning instances:
+                    <b>Pruning</b>
+                    -------
 
-                    - default/instance-a
-                    -> deleting snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - deleting snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - deleted snapshots: 1
-                    - kept snapshots: 0
+                    <b>Pruning summary</b>
+                    ---------------
+                      processed instances: 1
+                      deleted snapshots: 1
+                      kept snapshots: 0
                     "#,
                     stdout
                 );
@@ -112,7 +137,7 @@ mod tests {
                   on-prune-completed: "exit 1"
 
                 policies:
-                  _all:
+                  all:
                     keep-last: 0
                 "#
             );
@@ -120,45 +145,47 @@ mod tests {
             #[test]
             fn returns_prune_error() {
                 let mut stdout = Vec::new();
-                let config = Config::from_code(CONFIG);
-                let mut lxd = LxdFakeClient::new(vec![instance("instance-a")]);
+                let config = Config::parse(CONFIG);
+                let mut lxd = lxd();
 
                 let result =
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
                         .run();
 
-                assert_out!(
+                assert_stdout!(
                     r#"
-                    Backing-up instances:
+                    <b>Backing-up</b>
+                    ----------
 
-                    - default/instance-a
-                    -> creating snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - created snapshots: 1
+                    <b>Backing-up summary</b>
+                    ------------------
+                      processed instances: 1
+                      created snapshots: 1
 
-                    Pruning instances:
+                    <b>Pruning</b>
+                    -------
 
-                    - default/instance-a
-                    -> deleting snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - deleting snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - deleted snapshots: 1
-                    - kept snapshots: 0
+                    <b>Pruning summary</b>
+                    ---------------
+                      processed instances: 1
+                      deleted snapshots: 1
+                      kept snapshots: 0
                     "#,
                     stdout
                 );
 
-                assert_err!(
+                assert_result!(
                     r#"
                     Couldn't execute the `on-prune-completed` hook
 
                     Caused by:
-                        Hook returned a non-zero exit code
+                        Hook returned a non-zero exit code.
                     "#,
                     result
                 );
@@ -178,7 +205,7 @@ mod tests {
                   on-backup-completed: "exit 1"
 
                 policies:
-                  _all:
+                  all:
                     keep-last: 0
                 "#
             );
@@ -186,45 +213,47 @@ mod tests {
             #[test]
             fn returns_backup_error() {
                 let mut stdout = Vec::new();
-                let config = Config::from_code(CONFIG);
-                let mut lxd = LxdFakeClient::new(vec![instance("instance-a")]);
+                let config = Config::parse(CONFIG);
+                let mut lxd = lxd();
 
                 let result =
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
                         .run();
 
-                assert_out!(
+                assert_stdout!(
                     r#"
-                    Backing-up instances:
+                    <b>Backing-up</b>
+                    ----------
 
-                    - default/instance-a
-                    -> creating snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - created snapshots: 1
+                    <b>Backing-up summary</b>
+                    ------------------
+                      processed instances: 1
+                      created snapshots: 1
 
-                    Pruning instances:
+                    <b>Pruning</b>
+                    -------
 
-                    - default/instance-a
-                    -> deleting snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - deleting snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - deleted snapshots: 1
-                    - kept snapshots: 0
+                    <b>Pruning summary</b>
+                    ---------------
+                      processed instances: 1
+                      deleted snapshots: 1
+                      kept snapshots: 0
                     "#,
                     stdout
                 );
 
-                assert_err!(
+                assert_result!(
                     r#"
                     Couldn't execute the `on-backup-completed` hook
 
                     Caused by:
-                        Hook returned a non-zero exit code
+                        Hook returned a non-zero exit code.
                     "#,
                     result
                 );
@@ -241,7 +270,7 @@ mod tests {
                   on-prune-completed: "exit 1"
 
                 policies:
-                  _all:
+                  all:
                     keep-last: 0
                 "#
             );
@@ -249,40 +278,42 @@ mod tests {
             #[test]
             fn returns_both_errors() {
                 let mut stdout = Vec::new();
-                let config = Config::from_code(CONFIG);
-                let mut lxd = LxdFakeClient::new(vec![instance("instance-a")]);
+                let config = Config::parse(CONFIG);
+                let mut lxd = lxd();
 
                 let result =
                     BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
                         .run();
 
-                assert_out!(
+                assert_stdout!(
                     r#"
-                    Backing-up instances:
+                    <b>Backing-up</b>
+                    ----------
 
-                    - default/instance-a
-                    -> creating snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - creating snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - created snapshots: 1
+                    <b>Backing-up summary</b>
+                    ------------------
+                      processed instances: 1
+                      created snapshots: 1
 
-                    Pruning instances:
+                    <b>Pruning</b>
+                    -------
 
-                    - default/instance-a
-                    -> deleting snapshot: auto-19700101-000000
-                    -> [ OK ]
+                    <b>instance</b>
+                      - deleting snapshot: <i>auto-19700101-000000</i> <fg=32>[ OK ]</fg>
 
-                    Summary
-                    - processed instances: 1
-                    - deleted snapshots: 1
-                    - kept snapshots: 0
+                    <b>Pruning summary</b>
+                    ---------------
+                      processed instances: 1
+                      deleted snapshots: 1
+                      kept snapshots: 0
                     "#,
                     stdout
                 );
 
-                assert_err!(
+                assert_result!(
                     r#"
                     Couldn't backup and prune
 
@@ -290,13 +321,13 @@ mod tests {
                         Couldn't execute the `on-backup-completed` hook
 
                         Caused by:
-                            Hook returned a non-zero exit code
+                            Hook returned a non-zero exit code.
 
                     Prune error:
                         Couldn't execute the `on-prune-completed` hook
 
                         Caused by:
-                            Hook returned a non-zero exit code
+                            Hook returned a non-zero exit code.
                     "#,
                     result
                 );
