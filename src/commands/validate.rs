@@ -24,7 +24,7 @@ fn load_config(stdout: &mut dyn Write, args: &Args) -> Result<Config> {
         args.config.display()
     )?;
 
-    let config = crate::init_config(args)?;
+    let config = Config::load(&args.config)?;
 
     writeln!(stdout, ".. [ OK ]")?;
 
@@ -47,12 +47,9 @@ fn validate_config(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdCli
     let mut matching_instances = 0;
 
     for remote in config.remotes().iter() {
-        for project in lxd.projects(remote.name())? {
-            for instance in lxd.instances(remote.name(), &project.name)? {
-                if config
-                    .policies()
-                    .matches(remote.name(), &project, &instance)
-                {
+        for project in lxd.projects(remote)? {
+            for instance in lxd.instances(remote, &project.name)? {
+                if config.policies().matches(remote, &project, &instance) {
                     matching_instances += 1;
                 }
             }

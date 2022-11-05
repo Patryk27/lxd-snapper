@@ -22,19 +22,19 @@ impl<'a, 'b> DebugListInstances<'a, 'b> {
         }
 
         for remote in self.env.config.remotes().iter() {
-            for project in self.env.lxd.projects(remote.name())? {
-                for instance in self.env.lxd.instances(remote.name(), &project.name)? {
+            for project in self.env.lxd.projects(remote)? {
+                for instance in self.env.lxd.instances(remote, &project.name)? {
                     let policies = self
                         .env
                         .config
                         .policies()
-                        .find(remote.name(), &project, &instance)
+                        .find(remote, &project, &instance)
                         .collect();
 
                     let policies = format_policies(policies);
 
                     if has_remotes {
-                        table.add_row(row![remote.name(), project.name, instance.name, policies]);
+                        table.add_row(row![remote, project.name, instance.name, policies]);
                     } else {
                         table.add_row(row![project.name, instance.name, policies]);
                     }

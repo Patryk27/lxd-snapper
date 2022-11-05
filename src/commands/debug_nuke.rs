@@ -13,19 +13,19 @@ impl<'a, 'b> DebugNuke<'a, 'b> {
         let mut summary = Summary::default().with_deleted_snapshots();
 
         for remote in self.env.config.remotes().iter() {
-            for project in self.env.lxd.projects(remote.name())? {
-                for instance in self.env.lxd.instances(remote.name(), &project.name)? {
+            for project in self.env.lxd.projects(remote)? {
+                for instance in self.env.lxd.instances(remote, &project.name)? {
                     writeln!(
                         self.env.stdout,
                         "{}",
-                        format!("- {}:{}/{}", remote.name(), project.name, instance.name).bold(),
+                        format!("- {}:{}/{}", remote, project.name, instance.name).bold(),
                     )?;
 
                     if !self
                         .env
                         .config
                         .policies()
-                        .matches(remote.name(), &project, &instance)
+                        .matches(remote, &project, &instance)
                     {
                         writeln!(self.env.stdout, "  - {}", "[ EXCLUDED ]".yellow())?;
                         writeln!(self.env.stdout)?;
@@ -43,7 +43,7 @@ impl<'a, 'b> DebugNuke<'a, 'b> {
                         )?;
 
                         let result = self.env.lxd.delete_snapshot(
-                            remote.name(),
+                            remote,
                             &project.name,
                             &instance.name,
                             &snapshot.name,

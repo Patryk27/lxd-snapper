@@ -9,6 +9,10 @@ impl LxdRemoteName {
         Self(name.as_ref().into())
     }
 
+    pub fn local() -> Self {
+        Self::new("local")
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -17,7 +21,7 @@ impl LxdRemoteName {
 #[cfg(test)]
 impl Default for LxdRemoteName {
     fn default() -> Self {
-        Self::new("local")
+        Self::local()
     }
 }
 

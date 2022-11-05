@@ -1,7 +1,6 @@
 mod hooks;
 mod policies;
 mod policy;
-mod remote;
 mod remotes;
 
 use crate::prelude::*;
@@ -9,7 +8,7 @@ use chrono::TimeZone;
 use serde::Deserialize;
 use std::{fmt::Display, fs, path::Path};
 
-pub use self::{hooks::*, policies::*, policy::*, remote::*, remotes::*};
+pub use self::{hooks::*, policies::*, policy::*, remotes::*};
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,10 +24,10 @@ pub struct Config {
     hooks: Hooks,
 
     #[serde(default)]
-    policies: Policies,
+    remotes: Remotes,
 
     #[serde(default)]
-    remotes: Remotes,
+    policies: Policies,
 }
 
 impl Config {
@@ -72,10 +71,6 @@ impl Config {
 
     pub fn matches_snapshot_name(&self, name: &LxdSnapshotName) -> bool {
         name.as_str().starts_with(&self.snapshot_name_prefix)
-    }
-
-    pub fn disable_hooks(&mut self) {
-        self.hooks = Default::default();
     }
 }
 

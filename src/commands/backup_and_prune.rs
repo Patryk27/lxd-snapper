@@ -185,7 +185,7 @@ mod tests {
                     Couldn't execute the `on-prune-completed` hook
 
                     Caused by:
-                        Hook returned a non-zero exit code
+                        Hook returned a non-zero exit code.
                     "#,
                     result
                 );
@@ -253,7 +253,7 @@ mod tests {
                     Couldn't execute the `on-backup-completed` hook
 
                     Caused by:
-                        Hook returned a non-zero exit code
+                        Hook returned a non-zero exit code.
                     "#,
                     result
                 );
@@ -321,13 +321,13 @@ mod tests {
                         Couldn't execute the `on-backup-completed` hook
 
                         Caused by:
-                            Hook returned a non-zero exit code
+                            Hook returned a non-zero exit code.
 
                     Prune error:
                         Couldn't execute the `on-prune-completed` hook
 
                         Caused by:
-                            Hook returned a non-zero exit code
+                            Hook returned a non-zero exit code.
                     "#,
                     result
                 );

@@ -25,10 +25,10 @@ impl<'a, 'b> Prune<'a, 'b> {
     }
 
     pub fn run(mut self) -> Result<()> {
-        self.env.config.hooks().on_prune_started()?;
+        self.env.hooks().on_prune_started()?;
 
         let cmd_result = self.try_run();
-        let hook_result = self.env.config.hooks().on_prune_completed();
+        let hook_result = self.env.hooks().on_prune_completed();
 
         cmd_result.and(hook_result)
     }
@@ -37,10 +37,10 @@ impl<'a, 'b> Prune<'a, 'b> {
         if self.env.config.remotes().has_any_non_local_remotes() {
             for remote in self.env.config.remotes().iter() {
                 self.process_remote(true, remote)
-                    .with_context(|| format!("Couldn't process remote: {}", remote.name()))?;
+                    .with_context(|| format!("Couldn't process remote: {}", remote))?;
             }
         } else {
-            self.process_remote(false, &Remote::local())?;
+            self.process_remote(false, &LxdRemoteName::local())?;
         }
 
         write!(self.env.stdout, "{}", self.summary)?;
@@ -52,11 +52,11 @@ impl<'a, 'b> Prune<'a, 'b> {
         self.summary.as_result()
     }
 
-    fn process_remote(&mut self, print_remote: bool, remote: &Remote) -> Result<()> {
+    fn process_remote(&mut self, print_remote: bool, remote: &LxdRemoteName) -> Result<()> {
         let projects = self
             .env
             .lxd
-            .projects(remote.name())
+            .projects(remote)
             .context("Couldn't list projects")?;
 
         let print_project = projects.iter().any(|project| !project.name.is_default());
@@ -72,14 +72,14 @@ impl<'a, 'b> Prune<'a, 'b> {
     fn process_project(
         &mut self,
         print_remote: bool,
-        remote: &Remote,
+        remote: &LxdRemoteName,
         print_project: bool,
         project: &LxdProject,
     ) -> Result<()> {
         let instances = self
             .env
             .lxd
-            .instances(remote.name(), &project.name)
+            .instances(remote, &project.name)
             .context("Couldn't list instances")?;
 
         for instance in instances {
@@ -93,7 +93,7 @@ impl<'a, 'b> Prune<'a, 'b> {
     fn process_instance(
         &mut self,
         print_remote: bool,
-        remote: &Remote,
+        remote: &LxdRemoteName,
         print_project: bool,
         project: &LxdProject,
         instance: &LxdInstance,
@@ -103,7 +103,7 @@ impl<'a, 'b> Prune<'a, 'b> {
             "{}",
             PrettyLxdInstanceName::new(
                 print_remote,
-                remote.name(),
+                remote,
                 print_project,
                 &project.name,
                 &instance.name
@@ -112,12 +112,7 @@ impl<'a, 'b> Prune<'a, 'b> {
             .bold()
         )?;
 
-        if let Some(policy) = self
-            .env
-            .config
-            .policies()
-            .build(remote.name(), project, instance)
-        {
+        if let Some(policy) = self.env.config.policies().build(remote, project, instance) {
             self.try_process_instance(remote, project, instance, &policy)?;
         } else {
             writeln!(self.env.stdout, "  - {}", "[ EXCLUDED ]".yellow())?;
@@ -130,7 +125,7 @@ impl<'a, 'b> Prune<'a, 'b> {
 
     fn try_process_instance(
         &mut self,
-        remote: &Remote,
+        remote: &LxdRemoteName,
         project: &LxdProject,
         instance: &LxdInstance,
         policy: &Policy,
@@ -159,12 +154,12 @@ impl<'a, 'b> Prune<'a, 'b> {
                 let result = self
                     .env
                     .lxd
-                    .delete_snapshot(remote.name(), &project.name, &instance.name, &snapshot.name)
+                    .delete_snapshot(remote, &project.name, &instance.name, &snapshot.name)
                     .context("Couldn't delete snapshot");
 
                 let result = result.and_then(|_| {
-                    self.env.config.hooks().on_snapshot_deleted(
-                        remote.name(),
+                    self.env.hooks().on_snapshot_deleted(
+                        remote,
                         &project.name,
                         &instance.name,
                         &snapshot.name,
@@ -192,6 +187,10 @@ impl<'a, 'b> Prune<'a, 'b> {
                 }
             }
         }
+
+        self.env
+            .hooks()
+            .on_instance_pruned(remote, &project.name, &instance.name)?;
 
         Ok(())
     }

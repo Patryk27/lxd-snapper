@@ -5,17 +5,15 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 #[serde(transparent)]
 pub struct Remotes {
-    remotes: Vec<Remote>,
+    remotes: Vec<LxdRemoteName>,
 }
 
 impl Remotes {
     pub fn has_any_non_local_remotes(&self) -> bool {
-        self.remotes
-            .iter()
-            .any(|remote| remote.name().as_str() != "local")
+        self.remotes.iter().any(|remote| remote.as_str() != "local")
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Remote> {
+    pub fn iter(&self) -> impl Iterator<Item = &LxdRemoteName> {
         self.remotes.iter()
     }
 }
@@ -23,7 +21,7 @@ impl Remotes {
 impl Default for Remotes {
     fn default() -> Self {
         Self {
-            remotes: vec![Remote::local()],
+            remotes: vec![LxdRemoteName::local()],
         }
     }
 }

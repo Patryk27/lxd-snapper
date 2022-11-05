@@ -114,7 +114,7 @@ fn try_main() -> Result<()> {
         println!();
     }
 
-    let config = init_config(&args)?;
+    let config = Config::load(&args.config)?;
     let mut lxd = init_lxd(&args, &config)?;
 
     let mut env = Environment {
@@ -122,6 +122,7 @@ fn try_main() -> Result<()> {
         stdout,
         config: &config,
         lxd: &mut *lxd,
+        dry_run: args.dry_run,
     };
 
     match args.cmd {
@@ -139,16 +140,6 @@ fn try_main() -> Result<()> {
     }
 }
 
-fn init_config(args: &Args) -> Result<Config> {
-    let mut config = Config::load(&args.config)?;
-
-    if args.dry_run {
-        config.disable_hooks();
-    }
-
-    Ok(config)
-}
-
 fn init_lxd(args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
     let mut lxd = if let Some(lxc_path) = &args.lxc_path {
         LxdProcessClient::new(lxc_path)
@@ -158,9 +149,10 @@ fn init_lxd(args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
     .context("Couldn't initialize LXC client")?;
 
     if args.dry_run {
-        let remotes = config.remotes().iter().map(|remote| remote.name());
-
-        Ok(Box::new(LxdFakeClient::clone_from(&mut lxd, remotes)?))
+        Ok(Box::new(LxdFakeClient::clone_from(
+            &mut lxd,
+            config.remotes().iter(),
+        )?))
     } else {
         Ok(Box::new(lxd))
     }

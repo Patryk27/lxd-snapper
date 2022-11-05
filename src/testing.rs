@@ -28,6 +28,7 @@ macro_rules! assert_lxd {
     };
 }
 
+#[track_caller]
 pub fn assert_out(expected: impl AsRef<str>, actual: impl AsRef<str>) {
     let actual = sanitize_ansi_codes(actual);
     let actual = sanitize_empty_lines(actual);
