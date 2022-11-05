@@ -15,5 +15,4 @@ function build {
     gpg --output "${name}.sig" --detach-sig "${name}"
 }
 
-build "i686-linux" "linux32"
 build "x86_64-linux" "linux64"

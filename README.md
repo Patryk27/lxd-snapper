@@ -11,7 +11,7 @@ built-in `snapshots.schedule`, but more powerful.
 # Requirements
 
 - LXD 4 / 5
-- Linux (i386 or x86_64)
+- Linux (x86_64)
 
 Plus, if you plan on building lxd-snapper locally:
 
@@ -25,12 +25,8 @@ Plus, if you plan on building lxd-snapper locally:
 You can either download pre-built binaries:
 
 ``` console
-# i686
-$ wget https://github.com/Patryk27/lxd-snapper/releases/download/v1.2/lxd-snapper-linux32 -O lxd-snapper
-$ chmod u+x lxd-snapper
-
 # x86_64
-$ wget https://github.com/Patryk27/lxd-snapper/releases/download/v1.2/lxd-snapper-linux64 -O lxd-snapper
+$ wget https://github.com/Patryk27/lxd-snapper/releases/download/v1.3.0/lxd-snapper-linux64 -O lxd-snapper
 $ chmod u+x lxd-snapper
 ```
 
