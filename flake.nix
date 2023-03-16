@@ -66,24 +66,12 @@
     in
     {
       checks = {
-        i686-linux = mkCheck {
-          system = "i686-linux";
-        };
-
         x86_64-linux = mkCheck {
           system = "x86_64-linux";
         };
       };
 
       packages = {
-        i686-linux = {
-          default = mkPackage {
-            system = "i686-linux";
-            target = "i686-unknown-linux-musl";
-            RUSTFLAGS = "";
-          };
-        };
-
         x86_64-linux = {
           default = mkPackage {
             system = "x86_64-linux";

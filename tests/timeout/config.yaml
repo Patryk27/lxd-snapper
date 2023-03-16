@@ -1,0 +1,6 @@
+snapshot-name-format: '%Y%m%d'
+lxd-timeout: '0s'
+
+policies:
+  all:
+    keep-last: 0

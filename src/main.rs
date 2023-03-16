@@ -91,7 +91,7 @@ fn main() -> ExitCode {
 
         Err(err) => {
             println!();
-            println!("{}: {:?}", "Error:".red(), err);
+            println!("{}: {:?}", "Error".red(), err);
 
             ExitCode::FAILURE
         }
@@ -142,9 +142,9 @@ fn try_main() -> Result<()> {
 
 fn init_lxd(args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
     let mut lxd = if let Some(lxc_path) = &args.lxc_path {
-        LxdProcessClient::new(lxc_path)
+        LxdProcessClient::new(lxc_path, config.lxd_timeout())
     } else {
-        LxdProcessClient::find()
+        LxdProcessClient::find(config.lxd_timeout())
     }
     .context("Couldn't initialize LXC client")?;
 

@@ -677,9 +677,22 @@ snapshot-name-prefix: '...'
 #
 # Formatting string used to build the rest of the snapshot name.
 # 
-# Available specifiers:
+# Format:
 # https://docs.rs/chrono/0.4.22/chrono/format/strftime/index.html
 snapshot-name-format: '...'
+
+# (optional, defaults to '10m')
+#
+# Timeout for each call to `lxd ...`; prevents lxd-snapper from running forever
+# if lxd happens to hang.
+#
+# If you've got a (very) slow storage, you might want to increase this limit, 
+# but the default should be enough for a typical setup.
+#
+# Format:
+# https://docs.rs/humantime/latest/humantime/
+# (e.g. '30s', '5m', '1h' etc.)
+lxd-timeout: '...'
 
 # (optional)
 hooks:
@@ -728,7 +741,7 @@ lxd-snapper is a pretty standard Rust project, so cargo & rustc should be enough
 to get you going.
 
 There are also end-to-end tests written using [NixOS Testing Framework](https://nix.dev/tutorials/integration-testing-using-virtual-machines)
-that you can run with `nix flake check`.
+that you can run with `nix flake check -j4`.
 
 # Disclaimer
 

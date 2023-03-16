@@ -25,6 +25,10 @@
           return self.base.succeed(command)
 
 
+      def fail(self, command):
+          return self.base.fail(command)
+
+
       # Launches `lxd-snapper` with specified command, asserts that it succeeded
       # and returns its output.
       #
@@ -38,7 +42,24 @@
 
           if expected_out_file:
               expected_out = self.succeed(f"cat /test/{expected_out_file}")
+              assert expected_out == actual_out, f"outputs don't match; actual output:\n{actual_out}"
 
+          return actual_out
+
+
+      # Launches `lxd-snapper` with specified command, asserts that it failed
+      # and returns its output.
+      #
+      # ```python
+      # machine.lxd_snapper_err("backup")
+      # ```
+      def lxd_snapper_err(self, cmd, expected_out_file = None):
+          actual_out = self.fail(
+              f"lxd-snapper -c /test/config.yaml {cmd}"
+          )
+
+          if expected_out_file:
+              expected_out = self.succeed(f"cat /test/{expected_out_file}")
               assert expected_out == actual_out, f"outputs don't match; actual output:\n{actual_out}"
 
           return actual_out

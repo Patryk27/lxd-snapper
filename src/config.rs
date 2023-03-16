@@ -6,11 +6,13 @@ mod remotes;
 use crate::prelude::*;
 use chrono::TimeZone;
 use serde::Deserialize;
-use std::{fmt::Display, fs, path::Path};
+use serde_with::{serde_as, DisplayFromStr};
+use std::{fmt::Display, fs, path::Path, time::Duration};
 
 pub use self::{hooks::*, policies::*, policy::*, remotes::*};
 
-#[derive(Debug, Default, Deserialize)]
+#[serde_as]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -19,6 +21,10 @@ pub struct Config {
 
     #[serde(default = "default_snapshot_name_format")]
     snapshot_name_format: String,
+
+    #[serde(default = "default_lxd_timeout")]
+    #[serde_as(as = "DisplayFromStr")]
+    lxd_timeout: humantime::Duration,
 
     #[serde(default)]
     hooks: Hooks,
@@ -45,6 +51,10 @@ impl Config {
         })();
 
         result.with_context(|| format!("Couldn't load configuration from: {}", file.display()))
+    }
+
+    pub fn lxd_timeout(&self) -> Duration {
+        self.lxd_timeout.into()
     }
 
     pub fn hooks(&self) -> &Hooks {
@@ -74,12 +84,23 @@ impl Config {
     }
 }
 
+#[cfg(test)]
+impl Default for Config {
+    fn default() -> Self {
+        Self::parse("")
+    }
+}
+
 fn default_snapshot_name_prefix() -> String {
     "auto-".into()
 }
 
 fn default_snapshot_name_format() -> String {
     "%Y%m%d-%H%M%S".into()
+}
+
+fn default_lxd_timeout() -> humantime::Duration {
+    Duration::from_secs(10 * 60).into()
 }
 
 #[cfg(test)]

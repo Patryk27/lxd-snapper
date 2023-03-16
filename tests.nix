@@ -145,6 +145,7 @@ mkTests {
     ./tests/backup-and-prune-with-remotes
     ./tests/dry-run
     ./tests/hooks
+    ./tests/timeout
   ];
 
   lxds = [
