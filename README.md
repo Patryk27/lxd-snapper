@@ -683,8 +683,8 @@ snapshot-name-format: '...'
 
 # (optional, defaults to '10m')
 #
-# Timeout for each call to `lxd ...`; prevents lxd-snapper from running forever
-# if lxd happens to hang.
+# Timeout for each call to lxc; prevents lxd-snapper from running forever if lxc
+# happens to hang.
 #
 # If you've got a (very) slow storage, you might want to increase this limit, 
 # but the default should be enough for a typical setup.
@@ -692,7 +692,7 @@ snapshot-name-format: '...'
 # Format:
 # https://docs.rs/humantime/latest/humantime/
 # (e.g. '30s', '5m', '1h' etc.)
-lxd-timeout: '...'
+lxc-timeout: '...'
 
 # (optional)
 hooks:

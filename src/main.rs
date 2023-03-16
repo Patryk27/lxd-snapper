@@ -142,9 +142,9 @@ fn try_main() -> Result<()> {
 
 fn init_lxd(args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
     let mut lxd = if let Some(lxc_path) = &args.lxc_path {
-        LxdProcessClient::new(lxc_path, config.lxd_timeout())
+        LxdProcessClient::new(lxc_path, config.lxc_timeout())
     } else {
-        LxdProcessClient::find(config.lxd_timeout())
+        LxdProcessClient::find(config.lxc_timeout())
     }
     .context("Couldn't initialize LXC client")?;
 

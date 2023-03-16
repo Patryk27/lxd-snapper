@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn execute_timeout_ok() {
-        let actual = LxdProcessClient::new(fixture("lxd-timeout.sh"), Duration::from_secs(10))
+        let actual = LxdProcessClient::new(fixture("lxc-timeout.sh"), Duration::from_secs(10))
             .unwrap()
             .execute(|_| ())
             .unwrap();
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn execute_timeout_err() {
-        let actual = LxdProcessClient::new(fixture("lxd-timeout.sh"), Duration::from_millis(500))
+        let actual = LxdProcessClient::new(fixture("lxc-timeout.sh"), Duration::from_millis(500))
             .unwrap()
             .execute(|_| ())
             .unwrap_err()
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn execute_non_zero_exit_code() {
         let actual =
-            LxdProcessClient::new(fixture("lxd-non-zero-exit-code.sh"), Duration::from_secs(1))
+            LxdProcessClient::new(fixture("lxc-non-zero-exit-code.sh"), Duration::from_secs(1))
                 .unwrap()
                 .execute(|_| ())
                 .unwrap_err()

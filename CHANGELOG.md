@@ -1,6 +1,6 @@
 # 1.3.1
 
-- New configuration option: `lxd-timeout`.
+- New configuration option: `lxc-timeout`.
 - Fixed a typo where lxd-snapper would say `Error::` instead of just `Error:`.
 
 # 1.3.0
