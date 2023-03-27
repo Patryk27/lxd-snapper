@@ -2,11 +2,11 @@ use crate::lxd::*;
 use anyhow::{anyhow, Context};
 use pathsearch::find_executable_in_path;
 use serde::de::DeserializeOwned;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
-use wait_timeout::ChildExt;
 
 pub struct LxdProcessClient {
     lxc: PathBuf,
@@ -42,40 +42,37 @@ impl LxdProcessClient {
 
         callback(&mut command);
 
-        let mut command = command
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("Couldn't launch the `lxc` executable")?;
+        let (tx, rx) = mpsc::channel();
 
-        let mut stdout_ex = command.stdout.take().unwrap();
-        let mut stderr_ex = command.stderr.take().unwrap();
+        thread::spawn(move || {
+            let result = (|| {
+                let output = command
+                    .output()
+                    .context("Couldn't launch the `lxc` executable")?;
 
-        let status = command
-            .wait_timeout(self.timeout)
-            .context("Couldn't await the `lxc` executable")?
-            .context("Operation timed out - lxc took too long to answer")?;
+                if output.status.success() {
+                    let stdout =
+                        String::from_utf8(output.stdout).context("Couldn't read lxc's stdout")?;
 
-        if status.success() {
-            let mut stdout = String::default();
+                    Ok(stdout)
+                } else {
+                    let stderr = String::from_utf8(output.stderr)
+                        .context("Couldn't read lxc's stderr")?
+                        .trim()
+                        .to_string();
 
-            stdout_ex
-                .read_to_string(&mut stdout)
-                .context("Couldn't read lxc's stdout")?;
+                    Err(LxdError::Other(anyhow!(
+                        "lxc returned a non-zero status code and said: {}",
+                        stderr,
+                    )))
+                }
+            })();
 
-            Ok(stdout)
-        } else {
-            let mut stderr = String::default();
+            _ = tx.send(result);
+        });
 
-            stderr_ex
-                .read_to_string(&mut stderr)
-                .context("Couldn't read lxc's stderr")?;
-
-            Err(LxdError::Other(anyhow!(
-                "lxc returned a non-zero status code and said: {}",
-                stderr,
-            )))
-        }
+        rx.recv_timeout(self.timeout)
+            .map_err(|_| anyhow!("Operation timed out - lxc took too long to answer"))?
     }
 
     fn parse<T>(out: String) -> LxdResult<T>

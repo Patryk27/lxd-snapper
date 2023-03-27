@@ -47,10 +47,10 @@ $ ./result/bin/lxd-snapper
 
 ## Configuring
 
-Setting-up lxd-snapper is pretty easy: you just need to prepare a configuration
-file that will describe which LXD instances (so containers and/or virtual
-machines) you want to get snapshotted and for how long those snapshots should be
-kept around.
+Setting-up lxd-snapper is easy: you just need to prepare a configuration file
+that will describe which LXD instances (so containers and/or virtual machines)
+you want to get snapshotted and for how long those snapshots should be kept
+around.
 
 We can start with the most basic configuration:
 
