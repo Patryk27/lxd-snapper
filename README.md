@@ -750,5 +750,5 @@ snapshots and backups together, wisely.
 
 # License
 
-Copyright (c) 2019-2023, Patryk Wychowaniec <pwychowaniec@pm.me>.    
+Copyright (c) 2019-2024, Patryk Wychowaniec <pwychowaniec@pm.me>.    
 Licensed under the MIT license.
