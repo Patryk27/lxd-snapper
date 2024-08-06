@@ -8,9 +8,9 @@ pub fn find_snapshots_to_keep<'a>(
     const PATTERNS: &[(&str, &str)] = &[
         ("hourly", "%Y-%m-%d %H"),
         ("daily", "%Y-%m-%d"),
-        ("weekly", "%Y-%m-%U"),
+        ("weekly", "%Y-%U"),
         ("monthly", "%Y-%m"),
-        ("yearly", "%Y-%m"),
+        ("yearly", "%Y"),
         ("last", "%s"),
     ];
 
@@ -32,7 +32,11 @@ pub fn find_snapshots_to_keep<'a>(
         }
 
         for (pattern_name, pattern_format) in PATTERNS {
-            let snapshot_date = format!("{}", snapshot.created_at.format(pattern_format));
+            let snapshot_date = format!(
+                "{}.{}",
+                pattern_name,
+                snapshot.created_at.format(pattern_format)
+            );
 
             if !alive_dates.contains(&snapshot_date) {
                 let keep = match *pattern_name {
@@ -223,6 +227,43 @@ mod tests {
     }
 
     #[test]
+    fn keep_daily_and_weekly_and_monthly() {
+        let policy = Policy {
+            keep_daily: Some(6),
+            keep_weekly: Some(2),
+            keep_monthly: Some(1),
+            ..Default::default()
+        };
+
+        let snapshots = vec![
+            snapshot("snap-10", "2024-08-03 22:00:03"),
+            snapshot("snap-9", "2024-08-02 22:00:03"),
+            snapshot("snap-8", "2024-08-01 22:00:04"),
+            snapshot("snap-7", "2024-07-31 22:00:03"),
+            snapshot("snap-6", "2024-07-30 22:00:04"),
+            snapshot("snap-5", "2024-07-29 22:00:04"),
+            snapshot("snap-4", "2024-07-28 22:00:04"),
+            snapshot("snap-3", "2024-07-27 22:00:04"),
+            snapshot("snap-2", "2024-06-30 22:00:03"),
+            snapshot("snap-1", "2024-05-31 22:00:02"),
+        ];
+
+        let expected = vec![
+            "snap-10", // via keep-daily
+            "snap-9",  // via keep-daily
+            "snap-8",  // via keep-daily
+            "snap-7",  // via keep-daily
+            "snap-6",  // via keep-daily
+            "snap-5",  // via keep-daily
+            "snap-4",  // via keep-weekly (30th week)
+            "snap-3",  // via keep-monthly
+            "snap-2",  // via keep-weekly (26th week)
+        ];
+
+        test(policy, snapshots, expected);
+    }
+
+    #[test]
     fn keep_yearly() {
         let policy = Policy {
             keep_yearly: Some(4),
@@ -231,7 +272,7 @@ mod tests {
 
         let snapshots = vec![
             snapshot("snap-6", "2000-06-10 00:00:00"),
-            snapshot("snap-5", "2000-06-10 00:00:00"),
+            snapshot("snap-5", "2000-05-10 00:00:00"),
             snapshot("snap-4", "1999-06-10 00:00:00"),
             snapshot("snap-3", "1999-06-10 00:00:00"),
             snapshot("snap-2", "1998-06-10 00:00:00"),
