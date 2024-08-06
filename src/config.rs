@@ -115,8 +115,7 @@ mod tests {
         fn examples() {
             let examples: Vec<_> = glob::glob("docs/example-configs/*.yaml")
                 .unwrap()
-                .into_iter()
-                .map(|example| example.unwrap())
+                .map(|path| path.unwrap())
                 .collect();
 
             if examples.is_empty() {

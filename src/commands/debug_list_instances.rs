@@ -117,7 +117,7 @@ mod tests {
             +=========+===========+=====================+
             | default | mysql     | running + databases |
             +---------+-----------+---------------------+
-            | default | outlander | <fg=33>NONE</fg>                |
+            | default | outlander | <fg=33>NONE</fg>              |
             +---------+-----------+---------------------+
             | default | redis     | databases           |
             +---------+-----------+---------------------+
@@ -170,7 +170,7 @@ mod tests {
             +----------+---------+----------+-------------------+
             | server-b | default | php      | important-servers |
             +----------+---------+----------+-------------------+
-            | server-c | default | php      | <fg=33>NONE</fg>              |
+            | server-c | default | php      | <fg=33>NONE</fg>            |
             +----------+---------+----------+-------------------+
             "#,
             stdout

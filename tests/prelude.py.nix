@@ -1,4 +1,4 @@
-{ lxdConfig, lxdImageMetadata, lxdImageRootfs, testPath }: ''
+{ lxdConfig, lxdContainerMeta, lxdContainerImage, testPath }: ''
   class MyMachine(Machine):
       def __init__(self, base):
           base.succeed("date -s '2018-01-01 12:00:00'")
@@ -15,7 +15,7 @@
           )
 
           base.succeed(
-              "lxc image import ${lxdImageMetadata}/*/*.tar.xz ${lxdImageRootfs}/*/*.tar.xz --alias image"
+              "lxc image import ${lxdContainerMeta}/*/*.tar.xz ${lxdContainerImage}/*/*.tar.xz --alias image"
           )
 
           self.base = base

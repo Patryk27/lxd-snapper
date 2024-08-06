@@ -17,7 +17,7 @@ impl<'a> Environment<'a> {
         use chrono::TimeZone;
 
         Self {
-            time: || Utc.timestamp(0, 0),
+            time: || Utc.timestamp_opt(0, 0).unwrap(),
             stdout,
             config,
             lxd,

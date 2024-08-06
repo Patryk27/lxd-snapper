@@ -10,7 +10,7 @@ mod testing;
 mod prelude {
     pub(crate) use crate::utils::*;
     pub(crate) use crate::{config::*, environment::*, lxd::*};
-    pub use anyhow::{bail, Context, Error, Result};
+    pub use anyhow::{bail, Context, Result};
     pub use chrono::{DateTime, Utc};
     pub use colored::Colorize;
     pub use itertools::Itertools;

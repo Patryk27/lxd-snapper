@@ -1,10 +1,15 @@
 # These are lxd-snapper's acceptance tests; you can run them using:
 #
 # ```
-# nix flake check
+# nix flake check -j4
 # ```
 
-{ nixpkgs, lxd-snapper }:
+{ nixpkgs
+, nixpkgs--lxd-4
+, nixpkgs--lxd-5
+, nixpkgs--lxd-6
+, lxd-snapper
+}:
 
 let
   inherit (pkgs) lib;
@@ -13,7 +18,7 @@ let
     system = "x86_64-linux";
   };
 
-  lxdImage = import "${nixpkgs}/nixos/release.nix" {
+  lxdContainer = import "${nixpkgs}/nixos/release.nix" {
     configuration = {
       documentation = {
         enable = lib.mkForce false;
@@ -22,21 +27,11 @@ let
       environment = {
         noXlibs = lib.mkForce true;
       };
-
-      system = {
-        stateVersion = "22.11";
-      };
     };
   };
 
-  mkTest = testPath: testName: testNixpkgsRev:
+  mkTest = testPath: testName: testNixpkgs:
     let
-      testNixpkgs = builtins.fetchGit {
-        url = "https://github.com/NixOS/nixpkgs";
-        rev = testNixpkgsRev;
-        shallow = true;
-      };
-
       testPkgs = import testNixpkgs {
         system = "x86_64-linux";
       };
@@ -47,8 +42,8 @@ let
             inherit testPath;
 
             lxdConfig = ./tests/_fixtures/lxd-config.yaml;
-            lxdImageMetadata = lxdImage.lxdMeta.${pkgs.system};
-            lxdImageRootfs = lxdImage.lxdImage.${pkgs.system};
+            lxdContainerMeta = lxdContainer.lxdContainerMeta.${pkgs.system};
+            lxdContainerImage = lxdContainer.lxdContainerImage.${pkgs.system};
           };
 
         in
@@ -116,14 +111,14 @@ let
   mkTests = { tests, lxds }:
     let
       testCombinations =
-        lib.cartesianProductOfSets {
+        lib.cartesianProduct {
           testPath = tests;
           testLxd = lxds;
         };
 
       mkTestFromCombination = { testPath, testLxd }:
         let
-          testName = "${builtins.baseNameOf testPath}--${testLxd.version}";
+          testName = "${builtins.baseNameOf testPath}.lxd-${testLxd.version}";
 
         in
         {
@@ -149,9 +144,8 @@ mkTests {
   ];
 
   lxds = [
-    { version = "4.0"; nixpkgs = "2d9888f61c80f28b09d64f5e39d0ba02e3923057"; }
-    { version = "4.24"; nixpkgs = "d1c3fea7ecbed758168787fe4e4a3157e52bc808"; }
-    { version = "5.1"; nixpkgs = "bf972dc380f36a3bf83db052380e55f0eaa7dcb6"; }
-    { version = "5.5"; nixpkgs = "ee01de29d2f58d56b1be4ae24c24bd91c5380cea"; }
+    { version = "4"; nixpkgs = nixpkgs--lxd-4; }
+    { version = "5"; nixpkgs = nixpkgs--lxd-5; }
+    { version = "6"; nixpkgs = nixpkgs--lxd-6; }
   ];
 }
