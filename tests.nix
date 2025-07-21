@@ -4,11 +4,9 @@
 # nix flake check -j4
 # ```
 
-{ nixpkgs
-, nixpkgs--lxd-4
-, nixpkgs--lxd-5
-, nixpkgs--lxd-6
-, lxd-snapper
+{
+  nixpkgs,
+  lxd-snapper,
 }:
 
 let
@@ -23,14 +21,11 @@ let
       documentation = {
         enable = lib.mkForce false;
       };
-
-      environment = {
-        noXlibs = lib.mkForce true;
-      };
     };
   };
 
-  mkTest = testPath: testName: testNixpkgs:
+  mkTest =
+    testPath: testName: testNixpkgs:
     let
       testPkgs = import testNixpkgs {
         system = "x86_64-linux";
@@ -47,14 +42,13 @@ let
           };
 
         in
-        prelude
-        + "\n\n"
-        + (builtins.readFile "${testPath}/test.py");
+        prelude + "\n\n" + (builtins.readFile "${testPath}/test.py");
 
     in
     import "${testPath}/test.nix" {
       fw = rec {
-        mkNode = config @ { ... }:
+        mkNode =
+          config@{ ... }:
           lib.mkMerge [
             {
               boot = {
@@ -79,7 +73,7 @@ let
 
                 lxd = {
                   enable = true;
-                  package = testPkgs.lxd;
+                  package = testPkgs.lxd-lts;
                 };
 
                 qemu = {
@@ -93,7 +87,8 @@ let
             config
           ];
 
-        mkTest = { nodes }:
+        mkTest =
+          { nodes }:
           pkgs.nixosTest {
             inherit testScript nodes;
 
@@ -108,17 +103,18 @@ let
       };
     };
 
-  mkTests = { tests, lxds }:
+  mkTests =
+    { tests, lxds }:
     let
-      testCombinations =
-        lib.cartesianProduct {
-          testPath = tests;
-          testLxd = lxds;
-        };
+      testCombinations = lib.cartesianProduct {
+        testPath = tests;
+        testLxd = lxds;
+      };
 
-      mkTestFromCombination = { testPath, testLxd }:
+      mkTestFromCombination =
+        { testPath, testLxd }:
         let
-          testName = "${builtins.baseNameOf testPath}.lxd-${testLxd.version}";
+          testName = "${builtins.baseNameOf testPath}.lxd";
 
         in
         {
@@ -127,10 +123,7 @@ let
         };
 
     in
-    builtins.listToAttrs
-      (builtins.map
-        mkTestFromCombination
-        testCombinations);
+    builtins.listToAttrs (builtins.map mkTestFromCombination testCombinations);
 
 in
 mkTests {
@@ -144,8 +137,8 @@ mkTests {
   ];
 
   lxds = [
-    { version = "4"; nixpkgs = nixpkgs--lxd-4; }
-    { version = "5"; nixpkgs = nixpkgs--lxd-5; }
-    { version = "6"; nixpkgs = nixpkgs--lxd-6; }
+    {
+      inherit nixpkgs;
+    }
   ];
 }
