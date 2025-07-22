@@ -1,4 +1,4 @@
-# Upcoming
+# 1.5.0
 
 - Added support for Incus.
 - Dropped support for LXD 4 and LXD 5.

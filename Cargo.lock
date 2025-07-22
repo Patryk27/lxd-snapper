@@ -530,7 +530,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 
 [[package]]
 name = "lxd-snapper"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "ansi-parser",
  "anyhow",
