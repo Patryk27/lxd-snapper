@@ -1,5 +1,5 @@
 {
-  description = "lxd-snapper: LXD snapshots, automated";
+  description = "lxd-snapper: LXD/Incus snapshots, automated";
 
   inputs = {
     naersk = {

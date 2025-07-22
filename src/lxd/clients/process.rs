@@ -8,37 +8,48 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+#[derive(Clone, Debug)]
 pub struct LxdProcessClient {
-    lxc: PathBuf,
+    path: PathBuf,
+    flavor: LxcFlavor,
     timeout: Duration,
 }
 
 impl LxdProcessClient {
-    pub fn new(lxc: impl AsRef<Path>, timeout: Duration) -> LxdResult<Self> {
-        let lxc = lxc.as_ref();
+    pub fn new(path: impl AsRef<Path>, flavor: LxcFlavor, timeout: Duration) -> LxdResult<Self> {
+        let path = path.as_ref();
 
-        if !lxc.exists() {
+        if !path.exists() {
             return Err(LxdError::Other(anyhow!(
-                "Couldn't find the `lxc` executable: {}",
-                lxc.display()
+                "Couldn't find the client executable: {}",
+                path.display()
             )));
         }
 
         Ok(Self {
-            lxc: lxc.into(),
+            path: path.into(),
+            flavor,
             timeout,
         })
     }
 
-    pub fn find(timeout: Duration) -> LxdResult<Self> {
-        let lxc = find_executable_in_path("lxc")
-            .ok_or_else(|| anyhow!("Couldn't find the `lxc` executable in your `PATH` - please try specifying exact location with `--lxc-path`"))?;
+    pub fn auto(timeout: Duration) -> LxdResult<Self> {
+        if let Some(path) = find_executable_in_path("lxc") {
+            return Self::new(path, LxcFlavor::Lxc, timeout);
+        }
 
-        Self::new(lxc, timeout)
+        if let Some(path) = find_executable_in_path("incus") {
+            return Self::new(path, LxcFlavor::Incus, timeout);
+        }
+
+        Err(LxdError::Other(anyhow!(
+            "Couldn't find the `lxc` or `incus` executable in `PATH` - try \
+             providing an exact location via `--lxc-path` or `--incus-path`"
+        )))
     }
 
     fn execute(&mut self, callback: impl FnOnce(&mut Command)) -> LxdResult<String> {
-        let mut command = Command::new(&self.lxc);
+        let mut command = Command::new(&self.path);
 
         callback(&mut command);
 
@@ -48,21 +59,21 @@ impl LxdProcessClient {
             let result = (|| {
                 let output = command
                     .output()
-                    .context("Couldn't launch the `lxc` executable")?;
+                    .context("Couldn't launch the client's executable")?;
 
                 if output.status.success() {
-                    let stdout =
-                        String::from_utf8(output.stdout).context("Couldn't read lxc's stdout")?;
+                    let stdout = String::from_utf8(output.stdout)
+                        .context("Couldn't read client's stdout")?;
 
                     Ok(stdout)
                 } else {
                     let stderr = String::from_utf8(output.stderr)
-                        .context("Couldn't read lxc's stderr")?
+                        .context("Couldn't read client's stderr")?
                         .trim()
                         .to_string();
 
                     Err(LxdError::Other(anyhow!(
-                        "lxc returned a non-zero status code and said: {}",
+                        "Client returned a non-zero status code and said: {}",
                         stderr,
                     )))
                 }
@@ -72,7 +83,7 @@ impl LxdProcessClient {
         });
 
         rx.recv_timeout(self.timeout)
-            .map_err(|_| anyhow!("Operation timed out - lxc took too long to answer"))?
+            .map_err(|_| anyhow!("Operation timed out - client took too long to answer"))?
     }
 
     fn parse<T>(out: String) -> LxdResult<T>
@@ -80,7 +91,7 @@ impl LxdProcessClient {
         T: DeserializeOwned,
     {
         serde_json::from_str(&out)
-            .context("Couldn't parse lxc's stdout")
+            .context("Couldn't parse client's stdout")
             .map_err(LxdError::Other)
     }
 }
@@ -121,12 +132,25 @@ impl LxdClient for LxdProcessClient {
         instance: &LxdInstanceName,
         snapshot: &LxdSnapshotName,
     ) -> LxdResult<()> {
-        self.execute(|command| {
-            command
-                .arg("snapshot")
-                .arg(instance.on(remote))
-                .arg(snapshot.as_str())
-                .arg(format!("--project={}", project));
+        let flavor = self.flavor;
+
+        self.execute(|command| match flavor {
+            LxcFlavor::Lxc => {
+                command
+                    .arg("snapshot")
+                    .arg(instance.on(remote))
+                    .arg(snapshot.as_str())
+                    .arg(format!("--project={}", project));
+            }
+
+            LxcFlavor::Incus => {
+                command
+                    .arg("snapshot")
+                    .arg("create")
+                    .arg(instance.on(remote))
+                    .arg(snapshot.as_str())
+                    .arg(format!("--project={}", project));
+            }
         })?;
 
         Ok(())
@@ -139,15 +163,34 @@ impl LxdClient for LxdProcessClient {
         instance: &LxdInstanceName,
         snapshot: &LxdSnapshotName,
     ) -> LxdResult<()> {
-        self.execute(|command| {
-            command
-                .arg("delete")
-                .arg(format!("{}/{}", instance.on(remote), snapshot))
-                .arg(format!("--project={}", project));
+        let flavor = self.flavor;
+
+        self.execute(|command| match flavor {
+            LxcFlavor::Lxc => {
+                command
+                    .arg("delete")
+                    .arg(format!("{}/{}", instance.on(remote), snapshot))
+                    .arg(format!("--project={}", project));
+            }
+
+            LxcFlavor::Incus => {
+                command
+                    .arg("snapshot")
+                    .arg("delete")
+                    .arg(instance.on(remote))
+                    .arg(snapshot.as_str())
+                    .arg(format!("--project={}", project));
+            }
         })?;
 
         Ok(())
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum LxcFlavor {
+    Lxc,
+    Incus,
 }
 
 #[cfg(test)]
@@ -165,39 +208,50 @@ mod tests {
 
     #[test]
     fn execute_timeout_ok() {
-        let actual = LxdProcessClient::new(fixture("lxc-timeout.sh"), Duration::from_secs(10))
-            .unwrap()
-            .execute(|_| ())
-            .unwrap();
+        let actual = LxdProcessClient::new(
+            fixture("lxc-timeout.sh"),
+            LxcFlavor::Lxc,
+            Duration::from_secs(10),
+        )
+        .unwrap()
+        .execute(|_| ())
+        .unwrap();
 
         assert_eq!("done!", actual.trim());
     }
 
     #[test]
     fn execute_timeout_err() {
-        let actual = LxdProcessClient::new(fixture("lxc-timeout.sh"), Duration::from_millis(500))
-            .unwrap()
-            .execute(|_| ())
-            .unwrap_err()
-            .to_string();
+        let actual = LxdProcessClient::new(
+            fixture("lxc-timeout.sh"),
+            LxcFlavor::Lxc,
+            Duration::from_millis(500),
+        )
+        .unwrap()
+        .execute(|_| ())
+        .unwrap_err()
+        .to_string();
 
         assert_eq!(
-            "Operation timed out - lxc took too long to answer",
+            "Operation timed out - client took too long to answer",
             actual.trim()
         );
     }
 
     #[test]
     fn execute_non_zero_exit_code() {
-        let actual =
-            LxdProcessClient::new(fixture("lxc-non-zero-exit-code.sh"), Duration::from_secs(1))
-                .unwrap()
-                .execute(|_| ())
-                .unwrap_err()
-                .to_string();
+        let actual = LxdProcessClient::new(
+            fixture("lxc-non-zero-exit-code.sh"),
+            LxcFlavor::Lxc,
+            Duration::from_secs(1),
+        )
+        .unwrap()
+        .execute(|_| ())
+        .unwrap_err()
+        .to_string();
 
         assert_eq!(
-            "lxc returned a non-zero status code and said: oii stderr",
+            "Client returned a non-zero status code and said: oii stderr",
             actual.trim()
         );
     }

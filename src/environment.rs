@@ -7,20 +7,24 @@ pub struct Environment<'a> {
     pub time: fn() -> DateTime<Utc>,
     pub stdout: &'a mut dyn Write,
     pub config: &'a Config,
-    pub lxd: &'a mut dyn LxdClient,
+    pub client: &'a mut dyn LxdClient,
     pub dry_run: bool,
 }
 
 impl<'a> Environment<'a> {
     #[cfg(test)]
-    pub fn test(stdout: &'a mut dyn Write, config: &'a Config, lxd: &'a mut dyn LxdClient) -> Self {
+    pub fn test(
+        stdout: &'a mut dyn Write,
+        config: &'a Config,
+        client: &'a mut dyn LxdClient,
+    ) -> Self {
         use chrono::TimeZone;
 
         Self {
             time: || Utc.timestamp_opt(0, 0).unwrap(),
             stdout,
             config,
-            lxd,
+            client,
             dry_run: false,
         }
     }

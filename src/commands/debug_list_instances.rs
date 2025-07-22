@@ -22,8 +22,8 @@ impl<'a, 'b> DebugListInstances<'a, 'b> {
         }
 
         for remote in self.env.config.remotes().iter() {
-            for project in self.env.lxd.projects(remote)? {
-                for instance in self.env.lxd.instances(remote, &project.name)? {
+            for project in self.env.client.projects(remote)? {
+                for instance in self.env.client.instances(remote, &project.name)? {
                     let policies = self
                         .env
                         .config
@@ -77,36 +77,36 @@ mod tests {
                 "#
         ));
 
-        let mut lxd = LxdFakeClient::default();
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "ruby",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "rust",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "mysql",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "redis",
             status: LxdInstanceStatus::Stopped,
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "outlander",
             status: LxdInstanceStatus::Stopped,
             ..Default::default()
         });
 
-        DebugListInstances::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        DebugListInstances::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 
@@ -147,17 +147,17 @@ mod tests {
             "#
         ));
 
-        let mut lxd = LxdFakeClient::default();
+        let mut client = LxdFakeClient::default();
 
         for remote in ["local", "server-a", "server-b", "server-c"] {
-            lxd.add(LxdFakeInstance {
+            client.add(LxdFakeInstance {
                 remote,
                 name: "php",
                 ..Default::default()
             });
         }
 
-        DebugListInstances::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        DebugListInstances::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 

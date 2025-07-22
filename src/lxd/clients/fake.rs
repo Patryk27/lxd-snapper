@@ -269,57 +269,57 @@ mod tests {
     use crate::lxd::utils::*;
     use pretty_assertions as pa;
 
-    fn lxd() -> LxdFakeClient {
-        let mut lxd = LxdFakeClient::default();
+    fn client() -> LxdFakeClient {
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             project: "app",
             name: "checker",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             project: "db",
             name: "elastic",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             project: "db",
             name: "mysql",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "remote-a",
             project: "db",
             name: "mysql",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "remote-b",
             project: "db",
             name: "elastic",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "remote-b",
             project: "log",
             name: "grafana",
             ..Default::default()
         });
 
-        lxd
+        client
     }
 
     #[test]
     fn clone_from() {
-        let mut lxd1 = lxd();
+        let mut client1 = client();
 
-        let lxd2 = LxdFakeClient::clone_from(
-            &mut lxd1,
+        let client2 = LxdFakeClient::clone_from(
+            &mut client1,
             &[
                 remote_name("local"),
                 remote_name("remote-a"),
@@ -329,7 +329,7 @@ mod tests {
         )
         .unwrap();
 
-        pa::assert_eq!(lxd2, lxd1);
+        pa::assert_eq!(client2, client1);
     }
 
     mod projects {
@@ -337,34 +337,34 @@ mod tests {
 
         #[test]
         fn ok() {
-            let mut lxd = lxd();
+            let mut client = client();
 
             pa::assert_eq!(
                 Ok(vec![project("app"), project("db")]),
-                lxd.projects(&remote_name("local")),
+                client.projects(&remote_name("local")),
             );
 
             pa::assert_eq!(
                 Ok(vec![project("db")]),
-                lxd.projects(&remote_name("remote-a"))
+                client.projects(&remote_name("remote-a"))
             );
 
             pa::assert_eq!(
                 Ok(vec![project("db"), project("log")]),
-                lxd.projects(&remote_name("remote-b")),
+                client.projects(&remote_name("remote-b")),
             );
 
             pa::assert_eq!(
                 Ok(vec![project("db"), project("log")]),
-                lxd.projects(&remote_name("remote-b")),
+                client.projects(&remote_name("remote-b")),
             );
         }
 
         #[test]
         fn given_unknown_remote() {
-            let mut lxd = lxd();
+            let mut client = client();
 
-            pa::assert_eq!(Ok(vec![]), lxd.projects(&remote_name("unknown")));
+            pa::assert_eq!(Ok(vec![]), client.projects(&remote_name("unknown")));
         }
     }
 
@@ -373,51 +373,51 @@ mod tests {
 
         #[test]
         fn ok() {
-            let mut lxd = lxd();
+            let mut client = client();
 
             pa::assert_eq!(
                 Ok(vec![instance("checker")]),
-                lxd.instances(&remote_name("local"), &project_name("app"))
+                client.instances(&remote_name("local"), &project_name("app"))
             );
 
             pa::assert_eq!(
                 Ok(vec![instance("elastic"), instance("mysql")]),
-                lxd.instances(&remote_name("local"), &project_name("db"))
+                client.instances(&remote_name("local"), &project_name("db"))
             );
 
             pa::assert_eq!(
                 Ok(vec![instance("mysql")]),
-                lxd.instances(&remote_name("remote-a"), &project_name("db"))
+                client.instances(&remote_name("remote-a"), &project_name("db"))
             );
 
             pa::assert_eq!(
                 Ok(vec![instance("elastic")]),
-                lxd.instances(&remote_name("remote-b"), &project_name("db"))
+                client.instances(&remote_name("remote-b"), &project_name("db"))
             );
 
             pa::assert_eq!(
                 Ok(vec![instance("grafana")]),
-                lxd.instances(&remote_name("remote-b"), &project_name("log"))
+                client.instances(&remote_name("remote-b"), &project_name("log"))
             );
         }
 
         #[test]
         fn given_unknown_remote() {
-            let mut lxd = lxd();
+            let mut client = client();
 
             pa::assert_eq!(
                 Ok(vec![]),
-                lxd.instances(&remote_name("unknown"), &project_name("app"))
+                client.instances(&remote_name("unknown"), &project_name("app"))
             );
         }
 
         #[test]
         fn given_unknown_project() {
-            let mut lxd = lxd();
+            let mut client = client();
 
             pa::assert_eq!(
                 Ok(vec![]),
-                lxd.instances(&remote_name("local"), &project_name("unknown"))
+                client.instances(&remote_name("local"), &project_name("unknown"))
             );
         }
     }
@@ -427,17 +427,18 @@ mod tests {
 
         #[test]
         fn ok() {
-            let mut lxd = lxd();
+            let mut client = client();
 
-            lxd.create_snapshot(
-                &remote_name("local"),
-                &project_name("db"),
-                &instance_name("elastic"),
-                &snapshot_name("auto-1"),
-            )
-            .unwrap();
+            client
+                .create_snapshot(
+                    &remote_name("local"),
+                    &project_name("db"),
+                    &instance_name("elastic"),
+                    &snapshot_name("auto-1"),
+                )
+                .unwrap();
 
-            for (instance_id, instance) in &lxd.instances {
+            for (instance_id, instance) in &client.instances {
                 if instance_id.remote == remote_name("local")
                     && instance_id.project.as_str() == "db"
                     && instance_id.instance.as_str() == "elastic"
@@ -452,17 +453,18 @@ mod tests {
 
         #[test]
         fn given_existing_snapshot() {
-            let mut lxd = lxd();
+            let mut client = client();
 
-            lxd.create_snapshot(
-                &remote_name("local"),
-                &project_name("db"),
-                &instance_name("elastic"),
-                &snapshot_name("auto-1"),
-            )
-            .unwrap();
+            client
+                .create_snapshot(
+                    &remote_name("local"),
+                    &project_name("db"),
+                    &instance_name("elastic"),
+                    &snapshot_name("auto-1"),
+                )
+                .unwrap();
 
-            let actual = lxd
+            let actual = client
                 .create_snapshot(
                     &remote_name("local"),
                     &project_name("db"),
@@ -483,7 +485,7 @@ mod tests {
 
         #[test]
         fn given_unknown_remote() {
-            let actual = lxd()
+            let actual = client()
                 .create_snapshot(
                     &remote_name("unknown"),
                     &project_name("db"),
@@ -503,7 +505,7 @@ mod tests {
 
         #[test]
         fn given_unknown_project() {
-            let actual = lxd()
+            let actual = client()
                 .create_snapshot(
                     &remote_name("local"),
                     &project_name("unknown"),
@@ -523,7 +525,7 @@ mod tests {
 
         #[test]
         fn given_unknown_instance() {
-            let actual = lxd()
+            let actual = client()
                 .create_snapshot(
                     &remote_name("local"),
                     &project_name("app"),
@@ -547,27 +549,29 @@ mod tests {
 
         #[test]
         fn ok() {
-            let mut lxd = lxd();
+            let mut client = client();
 
             for i in 1..=3 {
-                lxd.create_snapshot(
+                client
+                    .create_snapshot(
+                        &remote_name("local"),
+                        &project_name("db"),
+                        &instance_name("elastic"),
+                        &snapshot_name(format!("auto-{}", i)),
+                    )
+                    .unwrap();
+            }
+
+            client
+                .delete_snapshot(
                     &remote_name("local"),
                     &project_name("db"),
                     &instance_name("elastic"),
-                    &snapshot_name(format!("auto-{}", i)),
+                    &snapshot_name("auto-2"),
                 )
                 .unwrap();
-            }
 
-            lxd.delete_snapshot(
-                &remote_name("local"),
-                &project_name("db"),
-                &instance_name("elastic"),
-                &snapshot_name("auto-2"),
-            )
-            .unwrap();
-
-            for (instance_id, instance) in &lxd.instances {
+            for (instance_id, instance) in &client.instances {
                 if instance_id.remote == remote_name("local")
                     && instance_id.project.as_str() == "db"
                     && instance_id.instance.as_str() == "elastic"
@@ -583,7 +587,7 @@ mod tests {
 
         #[test]
         fn given_unknown_remote() {
-            let actual = lxd()
+            let actual = client()
                 .delete_snapshot(
                     &remote_name("unknown"),
                     &project_name("db"),
@@ -603,7 +607,7 @@ mod tests {
 
         #[test]
         fn given_unknown_project() {
-            let actual = lxd()
+            let actual = client()
                 .delete_snapshot(
                     &remote_name("local"),
                     &project_name("unknown"),
@@ -623,7 +627,7 @@ mod tests {
 
         #[test]
         fn given_unknown_instance() {
-            let actual = lxd()
+            let actual = client()
                 .delete_snapshot(
                     &remote_name("local"),
                     &project_name("app"),
@@ -643,7 +647,7 @@ mod tests {
 
         #[test]
         fn given_unknown_snapshot() {
-            let actual = lxd()
+            let actual = client()
                 .delete_snapshot(
                     &remote_name("local"),
                     &project_name("app"),

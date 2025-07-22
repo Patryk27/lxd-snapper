@@ -13,8 +13,8 @@ impl<'a, 'b> DebugNuke<'a, 'b> {
         let mut summary = Summary::default().with_deleted_snapshots();
 
         for remote in self.env.config.remotes().iter() {
-            for project in self.env.lxd.projects(remote)? {
-                for instance in self.env.lxd.instances(remote, &project.name)? {
+            for project in self.env.client.projects(remote)? {
+                for instance in self.env.client.instances(remote, &project.name)? {
                     writeln!(
                         self.env.stdout,
                         "{}",
@@ -42,7 +42,7 @@ impl<'a, 'b> DebugNuke<'a, 'b> {
                             snapshot.name.as_str().italic()
                         )?;
 
-                        let result = self.env.lxd.delete_snapshot(
+                        let result = self.env.client.delete_snapshot(
                             remote,
                             &project.name,
                             &instance.name,
@@ -81,16 +81,16 @@ mod tests {
     use crate::lxd::{utils::*, *};
     use crate::{assert_lxd, assert_stdout};
 
-    fn lxd() -> LxdFakeClient {
-        let mut lxd = LxdFakeClient::default();
+    fn client() -> LxdFakeClient {
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "instance-a",
             snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "instance-b",
             snapshots: vec![
                 snapshot("snapshot-1", "2000-01-01 12:00:00"),
@@ -99,27 +99,27 @@ mod tests {
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "instance-c",
             status: LxdInstanceStatus::Stopping,
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "instance-d",
             status: LxdInstanceStatus::Stopped,
             snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "instance-d",
             remote: "remote",
             snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             ..Default::default()
         });
 
-        lxd
+        client
     }
 
     #[test]
@@ -134,9 +134,9 @@ mod tests {
             "#
         ));
 
-        let mut lxd = lxd();
+        let mut client = client();
 
-        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 
@@ -177,7 +177,7 @@ mod tests {
             remote:default/instance-d (Running)
             -> snapshot-1
             "#,
-            lxd
+            client
         );
     }
 
@@ -197,9 +197,9 @@ mod tests {
             "#
         ));
 
-        let mut lxd = lxd();
+        let mut client = client();
 
-        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 
@@ -242,7 +242,7 @@ mod tests {
 
             remote:default/instance-d (Running)
             "#,
-            lxd
+            client
         );
     }
 
@@ -250,9 +250,9 @@ mod tests {
     fn empty_policy() {
         let mut stdout = Vec::new();
         let config = Config::default();
-        let mut lxd = lxd();
+        let mut client = client();
 
-        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        DebugNuke::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 
@@ -295,7 +295,7 @@ mod tests {
             remote:default/instance-d (Running)
             -> snapshot-1
             "#,
-            lxd
+            client
         );
     }
 }

@@ -1,5 +1,5 @@
 machine = MyMachine(machine)
-machine.succeed("lxc launch image test")
+machine.succeed("lxc-or-incus launch image test")
 machine.succeed("touch /tmp/log.txt")
 
 # ---

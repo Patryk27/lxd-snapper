@@ -1,3 +1,8 @@
+# Upcoming
+
+- Added support for Incus.
+- Dropped support for LXD 4 and LXD 5.
+
 # 1.3.1
 
 - New configuration option: `lxc-timeout`.

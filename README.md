@@ -1,16 +1,16 @@
 # lxd-snapper
 
-**LXD snapshots, automated.**
+**LXD/Incus snapshots, automated.**
 
-lxd-snapper automates creating & removing LXD snapshots - just prepare a
+lxd-snapper automates creating & removing LXD/Incus snapshots - just prepare a
 snapshotting policy, setup a cronjob, and enjoy your containers.
 
-tl;dr it's a fancy wrapper for `lxc snapshot` & `lxc delete`; like LXD's
-built-in `snapshots.schedule`, but more powerful.
+tl;dr it's a fancy wrapper for `lxc snapshot` & `lxc delete`; like the built-in
+`snapshots.schedule`, but more powerful.
 
 # Requirements
 
-- LXD 4 / 5 / 6
+- LXD 6 or Incus 6
 - Linux (x86_64)
 
 Plus, if you plan on building lxd-snapper locally:
@@ -683,8 +683,8 @@ snapshot-name-format: '...'
 
 # (optional, defaults to '10m')
 #
-# Timeout for each call to lxc; prevents lxd-snapper from running forever if lxc
-# happens to hang.
+# Timeout for each call to lxc or incus; prevents lxd-snapper from running
+# forever if the client happens to hang.
 #
 # If you've got a (very) slow storage, you might want to increase this limit, 
 # but the default should be enough for a typical setup.
@@ -692,7 +692,7 @@ snapshot-name-format: '...'
 # Format:
 # https://docs.rs/humantime/latest/humantime/
 # (e.g. '30s', '5m', '1h' etc.)
-lxc-timeout: '...'
+timeout: '...'
 
 # (optional)
 hooks:

@@ -8,8 +8,7 @@ mod utils;
 mod testing;
 
 mod prelude {
-    pub(crate) use crate::utils::*;
-    pub(crate) use crate::{config::*, environment::*, lxd::*};
+    pub(crate) use crate::{config::*, environment::*, lxd::*, utils::*};
     pub use anyhow::{bail, Context, Result};
     pub use chrono::{DateTime, Utc};
     pub use colored::Colorize;
@@ -32,7 +31,7 @@ use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-/// LXD snapshots, automated
+/// LXD/Incus snapshots, automated
 #[derive(Parser)]
 pub struct Args {
     /// Runs application in a simulated safe-mode without applying any changes
@@ -48,6 +47,11 @@ pub struct Args {
     /// `PATH` environmental variable
     #[clap(short, long)]
     lxc_path: Option<PathBuf>,
+
+    /// Path to the `incus` executable; usually inferred automatically from the
+    /// `PATH` environmental variable
+    #[clap(short, long)]
+    incus_path: Option<PathBuf>,
 
     #[clap(subcommand)]
     cmd: Command,
@@ -115,13 +119,13 @@ fn try_main() -> Result<()> {
     }
 
     let config = Config::load(&args.config)?;
-    let mut lxd = init_lxd(&args, &config)?;
+    let mut client = init_client(&args, &config)?;
 
     let mut env = Environment {
         time: Utc::now,
         stdout,
         config: &config,
-        lxd: &mut *lxd,
+        client: &mut *client,
         dry_run: args.dry_run,
     };
 
@@ -140,20 +144,22 @@ fn try_main() -> Result<()> {
     }
 }
 
-fn init_lxd(args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
-    let mut lxd = if let Some(lxc_path) = &args.lxc_path {
-        LxdProcessClient::new(lxc_path, config.lxc_timeout())
+fn init_client(args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
+    let mut client = if let Some(path) = &args.lxc_path {
+        LxdProcessClient::new(path, LxcFlavor::Lxc, config.timeout())
+    } else if let Some(path) = &args.incus_path {
+        LxdProcessClient::new(path, LxcFlavor::Incus, config.timeout())
     } else {
-        LxdProcessClient::find(config.lxc_timeout())
+        LxdProcessClient::auto(config.timeout())
     }
-    .context("Couldn't initialize LXC client")?;
+    .context("Couldn't initialize the client")?;
 
     if args.dry_run {
         Ok(Box::new(LxdFakeClient::clone_from(
-            &mut lxd,
+            &mut client,
             config.remotes().iter(),
         )?))
     } else {
-        Ok(Box::new(lxd))
+        Ok(Box::new(client))
     }
 }

@@ -55,7 +55,7 @@ impl<'a, 'b> Prune<'a, 'b> {
     fn process_remote(&mut self, print_remote: bool, remote: &LxdRemoteName) -> Result<()> {
         let projects = self
             .env
-            .lxd
+            .client
             .projects(remote)
             .context("Couldn't list projects")?;
 
@@ -78,7 +78,7 @@ impl<'a, 'b> Prune<'a, 'b> {
     ) -> Result<()> {
         let instances = self
             .env
-            .lxd
+            .client
             .instances(remote, &project.name)
             .context("Couldn't list instances")?;
 
@@ -153,7 +153,7 @@ impl<'a, 'b> Prune<'a, 'b> {
 
                 let result = self
                     .env
-                    .lxd
+                    .client
                     .delete_snapshot(remote, &project.name, &instance.name, &snapshot.name)
                     .context("Couldn't delete snapshot");
 
@@ -215,9 +215,9 @@ mod tests {
         "#
         ));
 
-        let mut lxd = LxdFakeClient::default();
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "elastic",
             snapshots: vec![
                 snapshot("manual-1", "2000-01-01 12:00:00"),
@@ -230,7 +230,7 @@ mod tests {
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "mariadb",
             snapshots: vec![
                 snapshot("manual-1", "2000-01-01 12:00:00"),
@@ -242,7 +242,7 @@ mod tests {
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "postgresql",
             snapshots: vec![
                 snapshot("manual-1", "2000-01-01 12:00:00"),
@@ -253,7 +253,7 @@ mod tests {
             ..Default::default()
         });
 
-        Prune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        Prune::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 
@@ -302,7 +302,7 @@ mod tests {
             -> auto-2
             -> manual-2
             "#,
-            lxd
+            client
         );
     }
 
@@ -326,30 +326,30 @@ mod tests {
             "#
         ));
 
-        let mut lxd = LxdFakeClient::default();
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "db-1",
             name: "postgresql",
             snapshots: vec![snapshot("auto-1", "2000-01-01 13:00:00")],
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "db-2",
             name: "postgresql",
             snapshots: vec![snapshot("auto-1", "2000-01-01 13:00:00")],
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "db-3",
             name: "postgresql",
             snapshots: vec![snapshot("auto-1", "2000-01-01 13:00:00")],
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "db-4",
             name: "postgresql",
             snapshots: vec![snapshot("auto-1", "2000-01-01 13:00:00")],
@@ -357,7 +357,7 @@ mod tests {
             ..Default::default()
         });
 
-        Prune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        Prune::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 
@@ -396,7 +396,7 @@ mod tests {
             db-4:default/postgresql (Stopping)
             -> auto-1
             "#,
-            lxd
+            client
         );
     }
 
@@ -412,9 +412,9 @@ mod tests {
             "#
         ));
 
-        let mut lxd = LxdFakeClient::default();
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "elastic",
             snapshots: vec![
                 snapshot("auto-1", "2000-01-01 13:00:00"),
@@ -423,7 +423,7 @@ mod tests {
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "mariadb",
             snapshots: vec![
                 snapshot("auto-1", "2000-01-01 13:00:00"),
@@ -432,7 +432,7 @@ mod tests {
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "postgresql",
             snapshots: vec![
                 snapshot("auto-1", "2000-01-01 13:00:00"),
@@ -441,14 +441,14 @@ mod tests {
             ..Default::default()
         });
 
-        lxd.inject_error(LxdFakeError::OnDeleteSnapshot {
+        client.inject_error(LxdFakeError::OnDeleteSnapshot {
             remote: "local",
             project: "default",
             instance: "mariadb",
             snapshot: "auto-1",
         });
 
-        let result = Prune::new(&mut Environment::test(&mut stdout, &config, &mut lxd)).run();
+        let result = Prune::new(&mut Environment::test(&mut stdout, &config, &mut client)).run();
 
         assert_stdout!(
             r#"
@@ -488,7 +488,7 @@ mod tests {
 
             local:default/postgresql (Running)
             "#,
-            lxd
+            client
         );
     }
 }

@@ -1,9 +1,8 @@
-{ lxdConfig, lxdContainerMeta, lxdContainerImage, testPath }: ''
+{ lxdConfig, lxdContainerMeta, lxdContainerImage, testPath, testFlavor }: ''
   class MyMachine(Machine):
       def __init__(self, base):
           base.succeed("date -s '2018-01-01 12:00:00'")
           base.wait_for_unit("multi-user.target")
-          base.wait_for_file("/var/lib/lxd/unix.socket")
 
           base.succeed("mkdir /test")
           base.succeed("mount --bind ${testPath} /test")
@@ -11,14 +10,18 @@
           base.succeed("zpool create tank /dev/shm/tank")
 
           base.succeed(
-              "cat ${lxdConfig} | lxd init --preseed"
+              "cat ${lxdConfig} | lxd-or-incus init --preseed"
           )
 
           base.succeed(
-              "lxc image import ${lxdContainerMeta}/*/*.tar.xz ${lxdContainerImage}/*/*.tar.xz --alias image"
+              "lxc-or-incus image import ${lxdContainerMeta}/*/*.tar.xz ${lxdContainerImage}/*/*.tar.xz --alias image"
           )
 
           self.base = base
+
+
+      def flavor(self):
+          return "${testFlavor}"
 
 
       def succeed(self, command):
@@ -75,7 +78,7 @@
           snapshot_regex = snapshot_regex.replace("\\", "\\\\")
 
           self.succeed(
-              f"lxc query /1.0/instances/{instance}/snapshots?project={project}"
+              f"lxc-or-incus query /1.0/instances/{instance}/snapshots?project={project}"
               + f" | jq -e '[ .[] | select(test(\"{snapshot_regex}\")) ] | length == {snapshot_count}'"
           )
 

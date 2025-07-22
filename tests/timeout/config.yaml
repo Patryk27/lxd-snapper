@@ -1,5 +1,5 @@
 snapshot-name-format: '%Y%m%d'
-lxc-timeout: '0s'
+timeout: '0s'
 
 policies:
   all:

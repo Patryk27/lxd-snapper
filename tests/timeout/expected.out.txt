@@ -2,4 +2,4 @@
 Error: Couldn't list projects
 
 Caused by:
-    Operation timed out - lxc took too long to answer
+    Operation timed out - client took too long to answer

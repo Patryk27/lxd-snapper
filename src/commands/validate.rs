@@ -6,10 +6,10 @@ pub fn validate(stdout: &mut dyn Write, args: Args) -> Result<()> {
     let config = load_config(stdout, &args)?;
 
     writeln!(stdout)?;
-    let mut lxd = init_lxd(stdout, &args, &config)?;
+    let mut client = init_client(stdout, &args, &config)?;
 
     writeln!(stdout)?;
-    validate_config(stdout, &config, lxd.deref_mut())?;
+    validate_config(stdout, &config, client.deref_mut())?;
 
     writeln!(stdout)?;
     writeln!(stdout, "✓ Everything seems to be fine")?;
@@ -31,14 +31,14 @@ fn load_config(stdout: &mut dyn Write, args: &Args) -> Result<Config> {
     Ok(config)
 }
 
-fn init_lxd(stdout: &mut dyn Write, args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
-    writeln!(stdout, "Connecting to LXD")?;
+fn init_client(stdout: &mut dyn Write, args: &Args, config: &Config) -> Result<Box<dyn LxdClient>> {
+    writeln!(stdout, "Connecting to LXD/Incus")?;
 
-    let lxd = crate::init_lxd(args, config)?;
+    let client = crate::init_client(args, config)?;
 
     writeln!(stdout, ".. [ OK ]")?;
 
-    Ok(lxd)
+    Ok(client)
 }
 
 fn validate_config(stdout: &mut dyn Write, config: &Config, lxd: &mut dyn LxdClient) -> Result<()> {
@@ -93,6 +93,7 @@ mod tests {
             dry_run: false,
             config: "/tmp/ayy-ayy".into(),
             lxc_path: None,
+            incus_path: None,
             cmd: Command::Validate,
         };
 
@@ -125,6 +126,7 @@ mod tests {
             dry_run: false,
             config: config("missing_lxc_path"),
             lxc_path: Some("/tmp/ayy-ayy".into()),
+            incus_path: None,
             cmd: Command::Validate,
         };
 
@@ -135,17 +137,17 @@ mod tests {
             Loading configuration file: src/commands/validate/tests/missing_lxc_path/config.yaml
             .. [ OK ]
 
-            Connecting to LXD
+            Connecting to LXD/Incus
             "#,
             stdout
         );
 
         assert_result!(
             r#"
-            Couldn't initialize LXC client
+            Couldn't initialize the client
 
             Caused by:
-                Couldn't find the `lxc` executable: /tmp/ayy-ayy
+                Couldn't find the client executable: /tmp/ayy-ayy
             "#,
             result
         );

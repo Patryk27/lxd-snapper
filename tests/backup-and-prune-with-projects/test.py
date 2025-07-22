@@ -2,62 +2,83 @@ machine = MyMachine(machine)
 
 with subtest("Create some instances and snapshots for client-a"):
     machine.succeed(
-        "lxc project create client-a -c features.images=false -c features.profiles=false"
+        "lxc-or-incus project create client-a -c features.images=false -c features.profiles=false"
     )
 
-    machine.succeed("lxc project switch client-a")
+    machine.succeed("lxc-or-incus project switch client-a")
 
-    machine.succeed("lxc launch image apache")
-    machine.succeed("lxc snapshot apache")
+    # ---
+
+    machine.succeed("lxc-or-incus launch image apache")
+
+    if machine.flavor() == "lxd":
+        machine.succeed("lxc snapshot apache")
+    else:
+        machine.succeed("incus snapshot create apache")
+
     machine.assert_snapshot_exists("client-a", "apache", "snap0")
     machine.assert_snapshot_count("client-a", "apache", ".*", 1)
 
-    machine.succeed("lxc launch image mysql")
-    machine.succeed("lxc snapshot mysql")
+    # ---
+
+    machine.succeed("lxc-or-incus launch image mysql")
+
+    if machine.flavor() == "lxd":
+        machine.succeed("lxc snapshot mysql")
+    else:
+        machine.succeed("incus snapshot create mysql")
+
     machine.assert_snapshot_exists("client-a", "mysql", "snap0")
     machine.assert_snapshot_count("client-a", "mysql", ".*", 1)
 
-    machine.succeed("lxc launch image php")
-    machine.succeed("lxc snapshot php")
+    # ---
+
+    machine.succeed("lxc-or-incus launch image php")
+
+    if machine.flavor() == "lxd":
+        machine.succeed("lxc snapshot php")
+    else:
+        machine.succeed("incus snapshot create php")
+
     machine.assert_snapshot_exists("client-a", "php", "snap0")
     machine.assert_snapshot_count("client-a", "php", ".*", 1)
 
 
 with subtest("Create some instances for client-b"):
     machine.succeed(
-        "lxc project create client-b -c features.images=false -c features.profiles=false"
+        "lxc-or-incus project create client-b -c features.images=false -c features.profiles=false"
     )
 
-    machine.succeed("lxc project switch client-b")
+    machine.succeed("lxc-or-incus project switch client-b")
 
-    machine.succeed("lxc launch image apache")
+    machine.succeed("lxc-or-incus launch image apache")
     machine.assert_snapshot_count("client-b", "apache", ".*", 0)
 
-    machine.succeed("lxc launch image mysql")
+    machine.succeed("lxc-or-incus launch image mysql")
     machine.assert_snapshot_count("client-b", "mysql", ".*", 0)
 
-    machine.succeed("lxc launch image php")
+    machine.succeed("lxc-or-incus launch image php")
     machine.assert_snapshot_count("client-b", "php", ".*", 0)
 
 
 with subtest("Create some instances for client-c"):
     machine.succeed(
-        "lxc project create client-c -c features.images=false -c features.profiles=false"
+        "lxc-or-incus project create client-c -c features.images=false -c features.profiles=false"
     )
 
-    machine.succeed("lxc project switch client-c")
+    machine.succeed("lxc-or-incus project switch client-c")
 
-    machine.succeed("lxc launch image apache")
+    machine.succeed("lxc-or-incus launch image apache")
     machine.assert_snapshot_count("client-c", "apache", ".*", 0)
 
-    machine.succeed("lxc launch image mysql")
+    machine.succeed("lxc-or-incus launch image mysql")
     machine.assert_snapshot_count("client-c", "mysql", ".*", 0)
 
-    machine.succeed("lxc launch image php")
+    machine.succeed("lxc-or-incus launch image php")
     machine.assert_snapshot_count("client-c", "php", ".*", 0)
 
 
-machine.succeed("lxc project switch default")
+machine.succeed("lxc-or-incus project switch default")
 
 
 with subtest("Backup"):

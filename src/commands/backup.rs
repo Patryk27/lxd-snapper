@@ -49,7 +49,7 @@ impl<'a, 'b> Backup<'a, 'b> {
     fn process_remote(&mut self, print_remote: bool, remote: &LxdRemoteName) -> Result<()> {
         let projects = self
             .env
-            .lxd
+            .client
             .projects(remote)
             .context("Couldn't list projects")?;
 
@@ -72,7 +72,7 @@ impl<'a, 'b> Backup<'a, 'b> {
     ) -> Result<()> {
         let instances = self
             .env
-            .lxd
+            .client
             .instances(remote, &project.name)
             .context("Couldn't list instances")?;
 
@@ -158,7 +158,7 @@ impl<'a, 'b> Backup<'a, 'b> {
         )?;
 
         self.env
-            .lxd
+            .client
             .create_snapshot(remote, &project.name, &instance.name, &snapshot_name)
             .context("Couldn't create snapshot")?;
 
@@ -196,32 +196,32 @@ mod tests {
             "#
         ));
 
-        let mut lxd = LxdFakeClient::default();
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "elastic",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "mariadb",
             snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "mongodb",
             status: LxdInstanceStatus::Stopped,
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "postgresql",
             snapshots: vec![snapshot("snapshot-1", "2000-01-01 12:00:00")],
             ..Default::default()
         });
 
-        Backup::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        Backup::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 
@@ -261,7 +261,7 @@ mod tests {
             -> snapshot-1
             -> auto-19700101-000000
             "#,
-            lxd
+            client
         );
     }
 
@@ -285,34 +285,34 @@ mod tests {
             "#
         ));
 
-        let mut lxd = LxdFakeClient::default();
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "db-1",
             name: "postgresql",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "db-2",
             name: "postgresql",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "db-3",
             name: "postgresql",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             remote: "db-4",
             name: "postgresql",
             status: LxdInstanceStatus::Stopping,
             ..Default::default()
         });
 
-        Backup::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+        Backup::new(&mut Environment::test(&mut stdout, &config, &mut client))
             .run()
             .unwrap();
 
@@ -350,7 +350,7 @@ mod tests {
 
             db-4:default/postgresql (Stopping)
             "#,
-            lxd
+            client
         );
     }
 
@@ -365,31 +365,31 @@ mod tests {
             "#
         ));
 
-        let mut lxd = LxdFakeClient::default();
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "elastic",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "mariadb",
             ..Default::default()
         });
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "postgresql",
             ..Default::default()
         });
 
-        lxd.inject_error(LxdFakeError::OnCreateSnapshot {
+        client.inject_error(LxdFakeError::OnCreateSnapshot {
             remote: "local",
             project: "default",
             instance: "mariadb",
             snapshot: "auto-19700101-000000",
         });
 
-        let result = Backup::new(&mut Environment::test(&mut stdout, &config, &mut lxd)).run();
+        let result = Backup::new(&mut Environment::test(&mut stdout, &config, &mut client)).run();
 
         assert_stdout!(
             r#"
@@ -427,7 +427,7 @@ mod tests {
             local:default/postgresql (Running)
             -> auto-19700101-000000
             "#,
-            lxd
+            client
         );
     }
 }

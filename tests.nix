@@ -25,16 +25,12 @@ let
   };
 
   mkTest =
-    testPath: testName: testNixpkgs:
+    testPath: testName: testFlavor:
     let
-      testPkgs = import testNixpkgs {
-        system = "x86_64-linux";
-      };
-
       testScript =
         let
           prelude = import ./tests/prelude.py.nix {
-            inherit testPath;
+            inherit testPath testFlavor;
 
             lxdConfig = ./tests/_fixtures/lxd-config.yaml;
             lxdContainerMeta = lxdContainer.lxdContainerMeta.${pkgs.system};
@@ -56,14 +52,32 @@ let
               };
 
               environment = {
-                systemPackages = with pkgs; [
-                  jq
-                  lxd-snapper
-                ];
+                systemPackages =
+                  let
+                    lxc-or-incus = pkgs.writeShellScriptBin "lxc-or-incus" ''
+                      ${if testFlavor == "lxd" then "lxc" else "incus"} $@
+                    '';
+
+                    lxd-or-incus = pkgs.writeShellScriptBin "lxd-or-incus" ''
+                      ${if testFlavor == "lxd" then "lxd" else "incus admin"} $@
+                    '';
+
+                  in
+                  with pkgs;
+                  [
+                    jq
+                    lxc-or-incus
+                    lxd-or-incus
+                    lxd-snapper
+                  ];
               };
 
               networking = {
                 hostId = "01234567";
+
+                nftables = {
+                  enable = testFlavor == "incus";
+                };
               };
 
               virtualisation = {
@@ -71,9 +85,12 @@ let
                 memorySize = 2048;
                 diskSize = 2048;
 
+                incus = {
+                  enable = testFlavor == "incus";
+                };
+
                 lxd = {
-                  enable = true;
-                  package = testPkgs.lxd-lts;
+                  enable = testFlavor == "lxd";
                 };
 
                 qemu = {
@@ -103,42 +120,37 @@ let
       };
     };
 
-  mkTests =
-    { tests, lxds }:
-    let
-      testCombinations = lib.cartesianProduct {
-        testPath = tests;
-        testLxd = lxds;
-      };
-
-      mkTestFromCombination =
-        { testPath, testLxd }:
+  mkTests' =
+    tests: testFlavor:
+    builtins.listToAttrs (
+      builtins.map (
+        testPath:
         let
-          testName = "${builtins.baseNameOf testPath}.lxd";
+          testName = builtins.baseNameOf testPath;
 
         in
         {
-          name = testName;
-          value = mkTest testPath testName testLxd.nixpkgs;
-        };
+          name = "${testName}.${testFlavor}";
+          value = mkTest testPath testName testFlavor;
+        }
+      ) tests
+    );
+
+  mkTests =
+    tests:
+    let
+      lxdTests = mkTests' tests "lxd";
+      incusTests = mkTests' tests "incus";
 
     in
-    builtins.listToAttrs (builtins.map mkTestFromCombination testCombinations);
+    lxdTests // incusTests;
 
 in
-mkTests {
-  tests = [
-    ./tests/backup-and-prune
-    ./tests/backup-and-prune-with-projects
-    ./tests/backup-and-prune-with-remotes
-    ./tests/dry-run
-    ./tests/hooks
-    ./tests/timeout
-  ];
-
-  lxds = [
-    {
-      inherit nixpkgs;
-    }
-  ];
-}
+mkTests [
+  ./tests/backup-and-prune
+  ./tests/backup-and-prune-with-projects
+  ./tests/backup-and-prune-with-remotes
+  ./tests/dry-run
+  ./tests/hooks
+  ./tests/timeout
+]

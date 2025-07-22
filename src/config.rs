@@ -22,9 +22,10 @@ pub struct Config {
     #[serde(default = "default_snapshot_name_format")]
     snapshot_name_format: String,
 
-    #[serde(default = "default_lxc_timeout")]
+    #[serde(alias = "lxc-timeout")]
+    #[serde(default = "default_timeout")]
     #[serde_as(as = "DisplayFromStr")]
-    lxc_timeout: humantime::Duration,
+    timeout: humantime::Duration,
 
     #[serde(default)]
     hooks: Hooks,
@@ -53,8 +54,8 @@ impl Config {
         result.with_context(|| format!("Couldn't load configuration from: {}", file.display()))
     }
 
-    pub fn lxc_timeout(&self) -> Duration {
-        self.lxc_timeout.into()
+    pub fn timeout(&self) -> Duration {
+        self.timeout.into()
     }
 
     pub fn hooks(&self) -> &Hooks {
@@ -99,7 +100,7 @@ fn default_snapshot_name_format() -> String {
     "%Y%m%d-%H%M%S".into()
 }
 
-fn default_lxc_timeout() -> humantime::Duration {
+fn default_timeout() -> humantime::Duration {
     Duration::from_secs(10 * 60).into()
 }
 

@@ -63,15 +63,15 @@ mod tests {
     use crate::lxd::LxdFakeClient;
     use crate::{assert_result, assert_stdout};
 
-    fn lxd() -> LxdFakeClient {
-        let mut lxd = LxdFakeClient::default();
+    fn client() -> LxdFakeClient {
+        let mut client = LxdFakeClient::default();
 
-        lxd.add(LxdFakeInstance {
+        client.add(LxdFakeInstance {
             name: "instance",
             ..Default::default()
         });
 
-        lxd
+        client
     }
 
     mod when_backup_succeeds {
@@ -92,9 +92,9 @@ mod tests {
             fn returns_ok() {
                 let mut stdout = Vec::new();
                 let config = Config::parse(CONFIG);
-                let mut lxd = lxd();
+                let mut client = client();
 
-                BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+                BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut client))
                     .run()
                     .unwrap();
 
@@ -146,10 +146,10 @@ mod tests {
             fn returns_prune_error() {
                 let mut stdout = Vec::new();
                 let config = Config::parse(CONFIG);
-                let mut lxd = lxd();
+                let mut client = client();
 
                 let result =
-                    BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+                    BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut client))
                         .run();
 
                 assert_stdout!(
@@ -214,10 +214,10 @@ mod tests {
             fn returns_backup_error() {
                 let mut stdout = Vec::new();
                 let config = Config::parse(CONFIG);
-                let mut lxd = lxd();
+                let mut client = client();
 
                 let result =
-                    BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+                    BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut client))
                         .run();
 
                 assert_stdout!(
@@ -279,10 +279,10 @@ mod tests {
             fn returns_both_errors() {
                 let mut stdout = Vec::new();
                 let config = Config::parse(CONFIG);
-                let mut lxd = lxd();
+                let mut client = client();
 
                 let result =
-                    BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut lxd))
+                    BackupAndPrune::new(&mut Environment::test(&mut stdout, &config, &mut client))
                         .run();
 
                 assert_stdout!(

@@ -3,29 +3,27 @@ serverA = MyMachine(serverA)
 serverB = MyMachine(serverB)
 serverC = MyMachine(serverC)
 
-# Setup serverA
-serverA.succeed("lxc config set core.https_address 0.0.0.0")
-serverA.succeed("lxc config set core.trust_password test")
-serverA.succeed("date -s '2018-01-01 13:00:00'")
-main.succeed("lxc remote add serverA 192.168.1.2 --accept-certificate --password test")
+def setup(server, name, ip):
+    server.succeed("date -s '2018-01-01 13:00:00'")
+    server.succeed("lxc-or-incus config set core.https_address 0.0.0.0")
 
-# Setup serverB
-serverB.succeed("lxc config set core.https_address 0.0.0.0")
-serverB.succeed("lxc config set core.trust_password test")
-serverB.succeed("date -s '2018-01-01 13:00:00'")
-main.succeed("lxc remote add serverB 192.168.1.3 --accept-certificate --password test")
+    if main.flavor() == "lxd":
+        server.succeed("lxc config set core.trust_password test")
+        main.succeed(f"lxc remote add {name} {ip} --accept-certificate --password test")
+    else:
+        token = server.succeed("incus config trust add main -q")
+        main.succeed(f"incus remote add {name} {token}")
 
-# Setup serverC
-serverC.succeed("lxc config set core.https_address 0.0.0.0")
-serverC.succeed("lxc config set core.trust_password test")
-serverC.succeed("date -s '2018-01-01 13:00:00'")
-main.succeed("lxc remote add serverC 192.168.1.4 --accept-certificate --password test")
+# Setup servers
+setup(serverA, "serverA", "192.168.1.2")
+setup(serverB, "serverB", "192.168.1.3")
+setup(serverC, "serverC", "192.168.1.4")
 
 # Create containers
-main.succeed("lxc launch image container")
-serverA.succeed("lxc launch image container")
-serverB.succeed("lxc launch image container")
-serverC.succeed("lxc launch image container")
+main.succeed("lxc-or-incus launch image container")
+serverA.succeed("lxc-or-incus launch image container")
+serverB.succeed("lxc-or-incus launch image container")
+serverC.succeed("lxc-or-incus launch image container")
 
 # Backup containers
 main.lxd_snapper("backup", "expected.out.1.txt")
