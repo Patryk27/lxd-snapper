@@ -12,7 +12,7 @@ function build {
     rm result
 
     echo "Signing ${target}"
-    gpg --output "${name}.sig" --detach-sig "${name}"
+    gpg --output "${name}.sig" --armor --detach-sig "${name}"
 }
 
 build "x86_64-linux" "linux64"
