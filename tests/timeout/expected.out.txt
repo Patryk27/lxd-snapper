@@ -1,5 +1,0 @@
-
-Error: Couldn't list projects
-
-Caused by:
-    Operation timed out - client took too long to answer

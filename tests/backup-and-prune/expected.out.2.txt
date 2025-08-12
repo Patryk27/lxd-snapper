@@ -1,8 +1,0 @@
-test
-  - deleting snapshot: auto-20180101 [ OK ]
-
-Summary
--------
-  processed instances: 1
-  deleted snapshots: 1
-  kept snapshots: 0

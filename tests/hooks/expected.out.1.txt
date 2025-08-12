@@ -1,9 +1,0 @@
-(--dry-run is active, no changes will be applied)
-
-test
-  - creating snapshot: auto-20180101 [ OK ]
-
-Summary
--------
-  processed instances: 1
-  created snapshots: 1

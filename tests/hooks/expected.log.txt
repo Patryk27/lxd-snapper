@@ -1,8 +1,0 @@
-on-backup-started
-on-snapshot-created: local, default, test, auto-20180101
-on-instance-backed-up: local, default, test
-on-backup-completed
-on-prune-started
-on-snapshot-deleted: local, default, test, auto-20180101
-on-instance-pruned: local, default, test
-on-prune-completed

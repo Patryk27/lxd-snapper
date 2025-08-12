@@ -1,6 +1,0 @@
-snapshot-name-format: '%Y%m%d'
-timeout: '0s'
-
-policies:
-  all:
-    keep-last: 0

@@ -1,7 +1,0 @@
-test
-  - creating snapshot: auto-20180101 [ OK ]
-
-Summary
--------
-  processed instances: 1
-  created snapshots: 1
